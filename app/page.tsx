@@ -1,0 +1,945 @@
+"use client";
+
+import {
+  ChangeEvent,
+  FormEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
+type Tab = "today" | "closet" | "looks" | "ootd" | "consider";
+type EntryKind = "garment" | "outfit" | "wish";
+
+type Entry = {
+  id: string;
+  kind: EntryKind;
+  name: string;
+  category: string;
+  color: string;
+  season: string;
+  wornCount: number;
+  lastWornAt: string | null;
+  imageUrl: string | null;
+  notes: string;
+  extra: Record<string, string | number | boolean | string[]>;
+  createdAt: string;
+  isDemo?: boolean;
+};
+
+const DEMO_ITEMS: Entry[] = [
+  {
+    id: "demo-shirt",
+    kind: "garment",
+    name: "燕麦色亚麻衬衫",
+    category: "衬衫",
+    color: "燕麦",
+    season: "春夏",
+    wornCount: 12,
+    lastWornAt: "2026-07-18",
+    imageUrl: null,
+    notes: "",
+    extra: { shape: "shirt", tone: "#d8c6aa" },
+    createdAt: "2026-03-02",
+    isDemo: true,
+  },
+  {
+    id: "demo-tee",
+    kind: "garment",
+    name: "海盐白 T 恤",
+    category: "T恤",
+    color: "白色",
+    season: "四季",
+    wornCount: 23,
+    lastWornAt: "2026-07-21",
+    imageUrl: null,
+    notes: "",
+    extra: { shape: "tee", tone: "#f4f0e8" },
+    createdAt: "2026-02-11",
+    isDemo: true,
+  },
+  {
+    id: "demo-trousers",
+    kind: "garment",
+    name: "雾蓝阔腿裤",
+    category: "长裤",
+    color: "雾蓝",
+    season: "春秋",
+    wornCount: 8,
+    lastWornAt: "2026-06-03",
+    imageUrl: null,
+    notes: "",
+    extra: { shape: "pants", tone: "#8097a6" },
+    createdAt: "2025-10-13",
+    isDemo: true,
+  },
+  {
+    id: "demo-bag",
+    kind: "garment",
+    name: "黑色半月包",
+    category: "包袋",
+    color: "黑色",
+    season: "四季",
+    wornCount: 31,
+    lastWornAt: "2026-07-20",
+    imageUrl: null,
+    notes: "",
+    extra: { shape: "bag", tone: "#34322f" },
+    createdAt: "2025-09-20",
+    isDemo: true,
+  },
+  {
+    id: "demo-swim",
+    kind: "garment",
+    name: "深海蓝连体泳衣",
+    category: "泳装",
+    color: "深蓝",
+    season: "夏季",
+    wornCount: 3,
+    lastWornAt: "2026-05-08",
+    imageUrl: null,
+    notes: "",
+    extra: { shape: "swim", tone: "#254a5f" },
+    createdAt: "2025-07-01",
+    isDemo: true,
+  },
+  {
+    id: "demo-cap",
+    kind: "garment",
+    name: "柠檬黄泳帽",
+    category: "泳帽",
+    color: "黄色",
+    season: "夏季",
+    wornCount: 3,
+    lastWornAt: "2026-05-08",
+    imageUrl: null,
+    notes: "",
+    extra: { shape: "cap", tone: "#e5c958" },
+    createdAt: "2025-07-01",
+    isDemo: true,
+  },
+];
+
+const CATEGORY_OPTIONS = [
+  "T恤",
+  "衬衫",
+  "针织",
+  "外套",
+  "裙装",
+  "长裤",
+  "短裤",
+  "鞋履",
+  "包袋",
+  "配饰",
+  "泳装",
+  "泳帽",
+  "其他",
+];
+
+const NAV_ITEMS: Array<{ id: Tab; label: string; short: string }> = [
+  { id: "today", label: "今天", short: "今" },
+  { id: "closet", label: "衣橱", short: "衣" },
+  { id: "looks", label: "搭配", short: "搭" },
+  { id: "ootd", label: "OOTD", short: "拍" },
+  { id: "consider", label: "购前想想", short: "想" },
+];
+
+function daysSince(date: string | null) {
+  if (!date) return 999;
+  const diff = Date.now() - new Date(`${date}T12:00:00`).getTime();
+  return Math.max(0, Math.floor(diff / 86_400_000));
+}
+
+function GarmentVisual({
+  item,
+  className = "",
+}: {
+  item: Entry;
+  className?: string;
+}) {
+  if (item.imageUrl) {
+    return (
+      <div className={`garment-visual has-photo ${className}`}>
+        {/* User-owned uploads are served directly from this app. */}
+        <img src={item.imageUrl} alt={item.name} />
+      </div>
+    );
+  }
+
+  const shape = String(item.extra.shape || "tee");
+  const tone = String(item.extra.tone || "#d4c8b9");
+  return (
+    <div className={`garment-visual ${className}`} aria-label={item.name}>
+      <div className={`garment-shape shape-${shape}`} style={{ background: tone }} />
+    </div>
+  );
+}
+
+function Nav({
+  active,
+  onChange,
+}: {
+  active: Tab;
+  onChange: (tab: Tab) => void;
+}) {
+  return (
+    <>
+      <nav className="desktop-nav" aria-label="主要功能">
+        {NAV_ITEMS.map((item) => (
+          <button
+            key={item.id}
+            className={active === item.id ? "active" : ""}
+            onClick={() => onChange(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
+      <nav className="mobile-nav" aria-label="主要功能">
+        {NAV_ITEMS.map((item) => (
+          <button
+            key={item.id}
+            className={active === item.id ? "active" : ""}
+            onClick={() => onChange(item.id)}
+          >
+            <span>{item.short}</span>
+            {item.label}
+          </button>
+        ))}
+      </nav>
+    </>
+  );
+}
+
+function normalizeImage(file: File, removeBackground: boolean): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const src = URL.createObjectURL(file);
+    image.onload = () => {
+      const maxSide = 1400;
+      const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+      const width = Math.max(1, Math.round(image.width * scale));
+      const height = Math.max(1, Math.round(image.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d", { willReadFrequently: removeBackground });
+      if (!context) {
+        reject(new Error("无法读取图片"));
+        return;
+      }
+      context.drawImage(image, 0, 0, width, height);
+
+      if (removeBackground) {
+        const pixels = context.getImageData(0, 0, width, height);
+        const data = pixels.data;
+        const samplePoints = [
+          0,
+          (width - 1) * 4,
+          (height - 1) * width * 4,
+          ((height - 1) * width + width - 1) * 4,
+        ];
+        const bg = samplePoints.reduce(
+          (sum, index) => {
+            sum[0] += data[index];
+            sum[1] += data[index + 1];
+            sum[2] += data[index + 2];
+            return sum;
+          },
+          [0, 0, 0],
+        ).map((value) => value / samplePoints.length);
+
+        for (let index = 0; index < data.length; index += 4) {
+          const distance = Math.sqrt(
+            (data[index] - bg[0]) ** 2 +
+              (data[index + 1] - bg[1]) ** 2 +
+              (data[index + 2] - bg[2]) ** 2,
+          );
+          if (distance < 28) data[index + 3] = 0;
+          else if (distance < 64) data[index + 3] = Math.round(((distance - 28) / 36) * 255);
+        }
+        context.putImageData(pixels, 0, 0);
+      }
+
+      canvas.toBlob(
+        (blob) => {
+          URL.revokeObjectURL(src);
+          if (blob) resolve(blob);
+          else reject(new Error("图片处理失败"));
+        },
+        removeBackground ? "image/png" : "image/webp",
+        0.9,
+      );
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(src);
+      reject(new Error("图片读取失败"));
+    };
+    image.src = src;
+  });
+}
+
+function UploadModal({
+  mode,
+  items,
+  onClose,
+  onSaved,
+}: {
+  mode: EntryKind;
+  items: Entry[];
+  onClose: () => void;
+  onSaved: (entry: Entry) => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState("");
+  const [cleanBackground, setCleanBackground] = useState(mode !== "outfit");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState(mode === "outfit" ? "日常搭配" : "T恤");
+  const [color, setColor] = useState("");
+  const [season, setSeason] = useState("四季");
+  const [price, setPrice] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(
+    () => () => {
+      if (preview) URL.revokeObjectURL(preview);
+    },
+    [preview],
+  );
+
+  const similar = useMemo(() => {
+    if (mode !== "wish") return [];
+    return items.filter(
+      (item) =>
+        item.kind === "garment" &&
+        (item.category === category ||
+          (color && item.color.toLowerCase().includes(color.toLowerCase()))),
+    );
+  }, [items, category, color, mode]);
+
+  function pickFile(event: ChangeEvent<HTMLInputElement>) {
+    const next = event.target.files?.[0];
+    if (!next) return;
+    if (preview) URL.revokeObjectURL(preview);
+    setFile(next);
+    setPreview(URL.createObjectURL(next));
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!name.trim()) {
+      setError("先给它一个容易认出的名字吧");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const form = new FormData();
+      form.set("kind", mode);
+      form.set("name", name.trim());
+      form.set("category", category);
+      form.set("color", color.trim());
+      form.set("season", season);
+      form.set("notes", "");
+      form.set(
+        "extra",
+        JSON.stringify({
+          price,
+          cleaned: cleanBackground,
+          recommendation:
+            mode === "wish"
+              ? similar.length >= 3
+                ? "同类偏多，建议先用已有单品搭 3 套"
+                : similar.length > 0
+                  ? `已有 ${similar.length} 件相近单品，先比较版型与场景`
+                  : "衣橱里暂时没有明显重复，可以继续考虑"
+              : "",
+        }),
+      );
+
+      if (file) {
+        const blob = await normalizeImage(file, cleanBackground);
+        form.set(
+          "image",
+          new File([blob], cleanBackground ? "cleaned.png" : "garment.webp", {
+            type: blob.type,
+          }),
+        );
+      }
+
+      const response = await fetch("/api/entries", { method: "POST", body: form });
+      if (!response.ok) throw new Error("保存失败");
+      const saved = (await response.json()) as Entry;
+      onSaved(saved);
+    } catch {
+      setError("暂时没有保存成功，请稍后再试");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const title =
+    mode === "garment" ? "收进衣橱" : mode === "outfit" ? "记录今天的 OOTD" : "购前想一想";
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="upload-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="upload-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="modal-head">
+          <div>
+            <p className="eyebrow">
+              {mode === "wish" ? "BUY LESS, LOVE MORE" : "ADD TO YOUR STORY"}
+            </p>
+            <h2 id="upload-title">{title}</h2>
+          </div>
+          <button className="close-button" onClick={onClose} aria-label="关闭">
+            ×
+          </button>
+        </div>
+
+        <form onSubmit={submit}>
+          <button
+            type="button"
+            className={`photo-drop ${preview ? "with-preview" : ""}`}
+            onClick={() => fileRef.current?.click()}
+          >
+            {preview ? (
+              <img src={preview} alt="待上传预览" />
+            ) : (
+              <>
+                <span className="camera-mark">＋</span>
+                <strong>{mode === "outfit" ? "拍下今天这一身" : "拍照或从相册选择"}</strong>
+                <small>建议用纯色背景、自然光，后续处理会更干净</small>
+              </>
+            )}
+          </button>
+          <input
+            ref={fileRef}
+            className="sr-only"
+            type="file"
+            accept="image/*"
+            capture={mode === "garment" ? "environment" : undefined}
+            onChange={pickFile}
+          />
+
+          {mode !== "outfit" && (
+            <label className="clean-toggle">
+              <span>
+                <strong>清晰背景处理</strong>
+                <small>自动去除接近四角颜色的纯色背景</small>
+              </span>
+              <input
+                type="checkbox"
+                checked={cleanBackground}
+                onChange={(event) => setCleanBackground(event.target.checked)}
+              />
+              <i />
+            </label>
+          )}
+
+          <div className="form-grid">
+            <label className="field full">
+              <span>{mode === "outfit" ? "给这套搭配起个名字" : "名称"}</span>
+              <input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder={mode === "outfit" ? "例如：周四的轻松通勤" : "例如：米白色亚麻衬衫"}
+              />
+            </label>
+            <label className="field">
+              <span>{mode === "outfit" ? "场景" : "品类"}</span>
+              {mode === "outfit" ? (
+                <select value={category} onChange={(event) => setCategory(event.target.value)}>
+                  <option>日常搭配</option>
+                  <option>通勤</option>
+                  <option>约会</option>
+                  <option>旅行</option>
+                  <option>运动</option>
+                </select>
+              ) : (
+                <select value={category} onChange={(event) => setCategory(event.target.value)}>
+                  {CATEGORY_OPTIONS.map((option) => (
+                    <option key={option}>{option}</option>
+                  ))}
+                </select>
+              )}
+            </label>
+            <label className="field">
+              <span>颜色</span>
+              <input
+                value={color}
+                onChange={(event) => setColor(event.target.value)}
+                placeholder="例如：海盐白"
+              />
+            </label>
+            {mode === "wish" ? (
+              <label className="field full">
+                <span>价格（选填）</span>
+                <input
+                  value={price}
+                  onChange={(event) => setPrice(event.target.value)}
+                  inputMode="decimal"
+                  placeholder="¥"
+                />
+              </label>
+            ) : (
+              <label className="field full">
+                <span>适合季节</span>
+                <select value={season} onChange={(event) => setSeason(event.target.value)}>
+                  <option>四季</option>
+                  <option>春夏</option>
+                  <option>秋冬</option>
+                  <option>夏季</option>
+                  <option>冬季</option>
+                </select>
+              </label>
+            )}
+          </div>
+
+          {mode === "wish" && category && (
+            <div className={`similar-note ${similar.length >= 3 ? "warning" : ""}`}>
+              <span>{similar.length}</span>
+              <p>
+                {similar.length === 0
+                  ? `当前衣橱里没有同类的「${category}」`
+                  : `衣橱里已有 ${similar.length} 件同类或相近单品`}
+              </p>
+            </div>
+          )}
+
+          {error && <p className="form-error">{error}</p>}
+          <button className="primary-button wide" type="submit" disabled={saving}>
+            {saving ? "正在整理…" : mode === "wish" ? "生成购买建议" : "保存"}
+          </button>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function ProfileModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="profile-modal"
+        role="dialog"
+        aria-modal="true"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <button className="close-button" onClick={onClose} aria-label="关闭">
+          ×
+        </button>
+        <div className="profile-orbit">衣</div>
+        <p className="eyebrow">PRIVATE BETA</p>
+        <h2>把衣橱带在身边</h2>
+        <p>现在是你的私人体验版。注册入口已经预留，开放多人使用时可同步到不同设备。</p>
+        <button className="primary-button wide" onClick={onClose}>
+          注册 / 开启云同步
+        </button>
+        <small>当前版本的衣物照片已经安全保存在你的私人空间。</small>
+      </section>
+    </div>
+  );
+}
+
+export default function Home() {
+  const [activeTab, setActiveTab] = useState<Tab>("today");
+  const [entries, setEntries] = useState<Entry[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [uploadMode, setUploadMode] = useState<EntryKind | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState("全部");
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/entries")
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Unable to load wardrobe");
+        return (await response.json()) as Entry[];
+      })
+      .then((data) => {
+        if (!cancelled) setEntries(data);
+      })
+      .catch(() => {
+        if (!cancelled) setEntries([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const garments = entries.filter((entry) => entry.kind === "garment");
+  const visibleGarments = garments.length ? garments : DEMO_ITEMS;
+  const outfits = entries.filter((entry) => entry.kind === "outfit");
+  const wishes = entries.filter((entry) => entry.kind === "wish");
+  const longUnworn = visibleGarments
+    .filter((item) => daysSince(item.lastWornAt) >= 30)
+    .sort((a, b) => daysSince(b.lastWornAt) - daysSince(a.lastWornAt));
+  const categories = ["全部", ...Array.from(new Set(visibleGarments.map((item) => item.category)))];
+  const closetView = visibleGarments.filter(
+    (item) =>
+      (categoryFilter === "全部" || item.category === categoryFilter) &&
+      (!query || `${item.name}${item.category}${item.color}`.toLowerCase().includes(query.toLowerCase())),
+  );
+
+  function addEntry(entry: Entry) {
+    setEntries((current) => [entry, ...current]);
+    setUploadMode(null);
+  }
+
+  return (
+    <main className="app-shell">
+      <header className="topbar">
+        <button className="wordmark" onClick={() => setActiveTab("today")}>
+          <span>W</span>
+          衣橱档案
+        </button>
+        <Nav active={activeTab} onChange={setActiveTab} />
+        <div className="top-actions">
+          <button className="add-top" onClick={() => setUploadMode("garment")}>
+            <span>＋</span> 录入单品
+          </button>
+          <button className="profile-button" onClick={() => setProfileOpen(true)} aria-label="账户">
+            LC
+          </button>
+        </div>
+      </header>
+
+      <div className="page-wrap">
+        {activeTab === "today" && (
+          <section className="today-page">
+            <div className="hero-copy">
+              <p className="eyebrow">WARDROBE ARCHIVE / NO. 023</p>
+              <h1>
+                今天，穿得
+                <em>不那么正确。</em>
+              </h1>
+              <p>把衣服当成造型语言。先拆开、重组，再决定今天的轮廓。</p>
+              {!garments.length && loaded && (
+                <button className="demo-badge" onClick={() => setUploadMode("garment")}>
+                  现在展示的是示例衣橱 · 添加我的第一件
+                </button>
+              )}
+            </div>
+
+            <div className="summary-strip">
+              <div>
+                <strong>{garments.length || DEMO_ITEMS.length}</strong>
+                <span>件衣物</span>
+              </div>
+              <i />
+              <div>
+                <strong>{new Set(visibleGarments.map((item) => item.category)).size}</strong>
+                <span>个品类</span>
+              </div>
+              <i />
+              <div>
+                <strong>{outfits.length}</strong>
+                <span>套 OOTD</span>
+              </div>
+            </div>
+
+            <div className="today-grid">
+              <article className="outfit-feature">
+                <div className="section-head">
+                  <div>
+                    <p className="eyebrow">LOOK CONSTRUCTION / 01</p>
+                    <h2>今日造型实验</h2>
+                  </div>
+                  <button onClick={() => setActiveTab("looks")}>换一套</button>
+                </div>
+                <div className="look-canvas">
+                  <div className="look-note">
+                    <span>ASYMMETRY / DAILY</span>
+                    <p>打破安全比例，用层次和体积重新组织基础款。</p>
+                  </div>
+                  {visibleGarments.slice(0, 4).map((item, index) => (
+                    <GarmentVisual key={item.id} item={item} className={`look-item look-item-${index + 1}`} />
+                  ))}
+                </div>
+                <div className="look-footer">
+                  <div className="avatar-stack">
+                    {visibleGarments.slice(0, 3).map((item) => (
+                      <GarmentVisual key={item.id} item={item} />
+                    ))}
+                  </div>
+                  <span>用你衣橱里的 {Math.min(4, visibleGarments.length)} 件单品</span>
+                  <button onClick={() => setUploadMode("outfit")}>穿这套并记录</button>
+                </div>
+              </article>
+
+              <aside className="side-stack">
+                <article className="idle-card">
+                  <div className="idle-top">
+                    <span className="pulse-dot" />
+                    <p>UNWORN / 30+</p>
+                    <strong>{longUnworn.length}</strong>
+                  </div>
+                  <h3>被遗忘的单品，也是一份造型材料。</h3>
+                  <div className="idle-items">
+                    {longUnworn.slice(0, 3).map((item) => (
+                      <div key={item.id}>
+                        <GarmentVisual item={item} />
+                        <span>{daysSince(item.lastWornAt)} 天</span>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={() => setActiveTab("closet")}>
+                    看看是重新搭，还是告别 <span>→</span>
+                  </button>
+                </article>
+
+                <article className="buy-card">
+                  <p className="eyebrow">OBJECT UNDER REVIEW</p>
+                  <h3>不是每一件欲望，都需要拥有。</h3>
+                  <p>上传心仪单品，看看是否已有相近款、同类是否过量。</p>
+                  <button onClick={() => setUploadMode("wish")}>
+                    <span>＋</span> 上传想买的衣服
+                  </button>
+                </article>
+              </aside>
+            </div>
+
+            <section className="recent-section">
+              <div className="section-head">
+                <div>
+                  <p className="eyebrow">GARMENT INDEX</p>
+                  <h2>最近归档</h2>
+                </div>
+                <button onClick={() => setActiveTab("closet")}>查看全部</button>
+              </div>
+              <div className="piece-row">
+                {visibleGarments.slice(0, 6).map((item) => (
+                  <button key={item.id} className="piece-card" onClick={() => setActiveTab("closet")}>
+                    <GarmentVisual item={item} />
+                    <strong>{item.name}</strong>
+                    <span>
+                      {item.category} · {item.color}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          </section>
+        )}
+
+        {activeTab === "closet" && (
+          <section className="closet-page inner-page">
+            <div className="page-title-row">
+              <div>
+                <p className="eyebrow">GARMENT ARCHIVE / ALL</p>
+                <h1>衣物档案</h1>
+                <p>{garments.length || DEMO_ITEMS.length} 件单品，清清楚楚。</p>
+              </div>
+              <button className="primary-button" onClick={() => setUploadMode("garment")}>
+                ＋ 添加衣物
+              </button>
+            </div>
+            <div className="closet-tools">
+              <label className="search-box">
+                <span>⌕</span>
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="搜名称、品类或颜色"
+                />
+              </label>
+              <div className="filter-chips">
+                {categories.map((category) => (
+                  <button
+                    key={category}
+                    className={categoryFilter === category ? "active" : ""}
+                    onClick={() => setCategoryFilter(category)}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {!garments.length && loaded && (
+              <div className="sample-notice">这是示例衣橱。添加第一件后，就会切换成你的真实衣橱。</div>
+            )}
+            <div className="closet-grid">
+              {closetView.map((item) => (
+                <article className="closet-card" key={item.id}>
+                  <div className="closet-image">
+                    <GarmentVisual item={item} />
+                    {item.isDemo && <span className="sample-chip">示例</span>}
+                    {daysSince(item.lastWornAt) >= 30 && (
+                      <span className="idle-chip">{daysSince(item.lastWornAt)} 天未穿</span>
+                    )}
+                  </div>
+                  <div className="closet-meta">
+                    <strong>{item.name}</strong>
+                    <span>
+                      {item.category} · {item.color || "未标颜色"}
+                    </span>
+                    <small>穿过 {item.wornCount} 次</small>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {activeTab === "looks" && (
+          <section className="looks-page inner-page">
+            <div className="page-title-row">
+              <div>
+                <p className="eyebrow">DECONSTRUCT / RECONSTRUCT</p>
+                <h1>造型实验室</h1>
+                <p>把衣橱里的单品放在一起，先看感觉，再决定上身。</p>
+              </div>
+              <button className="primary-button" onClick={() => setUploadMode("outfit")}>
+                记录为 OOTD
+              </button>
+            </div>
+            <div className="mix-layout">
+              <div className="mix-canvas">
+                <div className="canvas-top">
+                  <span>LOOK 01</span>
+                  <strong>轻松通勤</strong>
+                  <button>重新组合</button>
+                </div>
+                <div className="mix-board">
+                  {visibleGarments.slice(0, 5).map((item, index) => (
+                    <div className={`mix-piece mix-${index + 1}`} key={item.id}>
+                      <GarmentVisual item={item} />
+                      <span>{item.name}</span>
+                    </div>
+                  ))}
+                  <div className="style-caption">干净 / 松弛 / 有一点海风</div>
+                </div>
+              </div>
+              <aside className="palette-panel">
+                <p className="eyebrow">COLOR STORY</p>
+                <h3>这一套的颜色</h3>
+                <div className="color-row">
+                  <i style={{ background: "#f4f0e8" }} />
+                  <i style={{ background: "#d8c6aa" }} />
+                  <i style={{ background: "#8097a6" }} />
+                  <i style={{ background: "#34322f" }} />
+                </div>
+                <p>明度接近、冷暖平衡，适合不需要太正式的通勤或周末见面。</p>
+                <div className="weather-note">
+                  <span>29°</span>
+                  <p>轻薄透气<br />室内可加一件外搭</p>
+                </div>
+              </aside>
+            </div>
+          </section>
+        )}
+
+        {activeTab === "ootd" && (
+          <section className="ootd-page inner-page">
+            <div className="page-title-row">
+              <div>
+                <p className="eyebrow">WORN ARCHIVE</p>
+                <h1>穿着记录</h1>
+                <p>记住真正穿过的搭配，也让闲置判断更准确。</p>
+              </div>
+              <button className="primary-button" onClick={() => setUploadMode("outfit")}>
+                ＋ 记录今天
+              </button>
+            </div>
+            {outfits.length ? (
+              <div className="ootd-grid">
+                {outfits.map((outfit) => (
+                  <article key={outfit.id} className="ootd-card">
+                    <GarmentVisual item={outfit} />
+                    <div>
+                      <span>{new Date(outfit.createdAt).toLocaleDateString("zh-CN")}</span>
+                      <strong>{outfit.name}</strong>
+                      <small>{outfit.category}</small>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-journal">
+                <div className="journal-date">
+                  <span>23</span>
+                  <small>JUL</small>
+                </div>
+                <div>
+                  <p className="eyebrow">YOUR FIRST PAGE</p>
+                  <h2>今天穿了什么？</h2>
+                  <p>拍一张全身照，或记录刚刚搭好的那一套。以后回头看，会比想象中更有意思。</p>
+                  <button onClick={() => setUploadMode("outfit")}>拍下今天的 OOTD</button>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
+        {activeTab === "consider" && (
+          <section className="consider-page inner-page">
+            <div className="consider-hero">
+              <p className="eyebrow">DESIRE / REVIEW / DECIDE</p>
+              <h1>欲望需要<br />一次审查。</h1>
+              <p>上传一件想买的衣服，衣橱会从品类、颜色和已有数量三个方向给你一个冷静建议。</p>
+              <button className="primary-button" onClick={() => setUploadMode("wish")}>
+                ＋ 上传心仪单品
+              </button>
+            </div>
+            <div className="decision-board">
+              <div className="decision-stat">
+                <span>{wishes.length}</span>
+                <p>件正在考虑</p>
+              </div>
+              <div className="decision-stat">
+                <span>{new Set(visibleGarments.map((item) => item.category)).size}</span>
+                <p>个已有品类</p>
+              </div>
+              <div className="decision-rule">
+                <p className="eyebrow">YOUR RULE</p>
+                <h3>同类超过 3 件，先搭再买。</h3>
+                <span>这条规则可以以后按你的习惯调整。</span>
+              </div>
+            </div>
+            {wishes.length > 0 && (
+              <div className="wish-list">
+                {wishes.map((wish) => (
+                  <article key={wish.id}>
+                    <GarmentVisual item={wish} />
+                    <div>
+                      <strong>{wish.name}</strong>
+                      <span>{wish.category} · {wish.color}</span>
+                      <p>{String(wish.extra.recommendation || "已经收进考虑清单")}</p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+      </div>
+
+      <button className="mobile-add" onClick={() => setUploadMode("garment")} aria-label="添加衣物">
+        ＋
+      </button>
+
+      {uploadMode && (
+        <UploadModal
+          mode={uploadMode}
+          items={visibleGarments}
+          onClose={() => setUploadMode(null)}
+          onSaved={addEntry}
+        />
+      )}
+      {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}
+    </main>
+  );
+}
