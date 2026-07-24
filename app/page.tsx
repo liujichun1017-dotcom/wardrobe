@@ -186,6 +186,17 @@ const CATEGORY_OPTIONS = [
   "其他",
 ];
 
+const REMOVAL_REASONS = [
+  { id: "sold", label: "已售出", note: "卖掉了，保留过往穿着记录" },
+  { id: "gifted", label: "送人了", note: "离开衣橱，但仍属于你的风格档案" },
+  { id: "donated", label: "已捐赠", note: "记录去向，不再参与搭配与数量统计" },
+  { id: "retired", label: "其他原因", note: "损坏、淘汰或暂时不再拥有" },
+];
+
+function removalReasonLabel(reason: unknown) {
+  return REMOVAL_REASONS.find((item) => item.id === reason)?.label || "已出库";
+}
+
 const NAV_ITEMS: Array<{ id: Tab; label: string; short: string }> = [
   { id: "today", label: "今天", short: "今" },
   { id: "closet", label: "清单", short: "衣" },
@@ -625,6 +636,132 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+function RemoveGarmentModal({
+  item,
+  onClose,
+  onUpdated,
+  onDeleted,
+}: {
+  item: Entry;
+  onClose: () => void;
+  onUpdated: (entry: Entry) => void;
+  onDeleted: (id: string) => void;
+}) {
+  const [reason, setReason] = useState("sold");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  async function retireGarment() {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/entries", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: item.id,
+          status: "removed",
+          removalReason: reason,
+        }),
+      });
+      if (!response.ok) throw new Error("Unable to archive garment");
+      onUpdated((await response.json()) as Entry);
+    } catch {
+      setError("暂时没有出库成功，请稍后再试");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function permanentlyDelete() {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/entries?id=${encodeURIComponent(item.id)}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("Unable to delete garment");
+      onDeleted(item.id);
+    } catch {
+      setError("暂时没有删除成功，请稍后再试");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="remove-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="remove-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="modal-head">
+          <div>
+            <p className="eyebrow">GARMENT DEPARTURE</p>
+            <h2 id="remove-title">衣物出库</h2>
+          </div>
+          <button className="close-button" onClick={onClose} aria-label="关闭">
+            ×
+          </button>
+        </div>
+
+        <div className="remove-garment-preview">
+          <GarmentVisual item={item} />
+          <div>
+            <span>{item.category} / {item.color || "未标颜色"}</span>
+            <strong>{item.name}</strong>
+            <small>出库后不再参与衣橱数量、搭配和闲置提醒。</small>
+          </div>
+        </div>
+
+        <fieldset className="removal-reasons">
+          <legend>为什么离开衣橱？</legend>
+          {REMOVAL_REASONS.map((option) => (
+            <label key={option.id} className={reason === option.id ? "active" : ""}>
+              <input
+                type="radio"
+                name="removal-reason"
+                value={option.id}
+                checked={reason === option.id}
+                onChange={() => setReason(option.id)}
+              />
+              <span>{option.label}</span>
+              <small>{option.note}</small>
+            </label>
+          ))}
+        </fieldset>
+
+        <div className="retire-explainer">
+          <strong>建议选择“确认出库”</strong>
+          <p>照片和资料会保留在档案馆的“已出库”陈列里，以前的 OOTD 也不会受影响。</p>
+        </div>
+
+        {error && <p className="form-error">{error}</p>}
+        <button className="primary-button wide retire-confirm" onClick={retireGarment} disabled={busy}>
+          {busy ? "正在处理…" : `确认出库 · ${removalReasonLabel(reason)}`}
+        </button>
+
+        {!confirmDelete ? (
+          <button className="permanent-delete-link" onClick={() => setConfirmDelete(true)}>
+            不保留记录，彻底删除
+          </button>
+        ) : (
+          <div className="permanent-delete-confirm">
+            <p>这会永久删除照片和资料，无法恢复。</p>
+            <button onClick={() => setConfirmDelete(false)}>返回</button>
+            <button onClick={permanentlyDelete} disabled={busy}>
+              {busy ? "正在删除…" : "确认彻底删除"}
+            </button>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("today");
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -635,6 +772,7 @@ export default function Home() {
   const [archiveView, setArchiveView] = useState<ArchiveView>("outfits");
   const [archiveScene, setArchiveScene] = useState("全部");
   const [archiveCategory, setArchiveCategory] = useState("全部");
+  const [removeTarget, setRemoveTarget] = useState<Entry | null>(null);
   const [query, setQuery] = useState("");
 
   useEffect(() => {
@@ -658,7 +796,9 @@ export default function Home() {
     };
   }, []);
 
-  const garments = entries.filter((entry) => entry.kind === "garment");
+  const allGarments = entries.filter((entry) => entry.kind === "garment");
+  const garments = allGarments.filter((entry) => entry.extra.status !== "removed");
+  const removedGarments = allGarments.filter((entry) => entry.extra.status === "removed");
   const visibleGarments = garments.length ? garments : DEMO_ITEMS;
   const outfits = entries.filter((entry) => entry.kind === "outfit");
   const visibleOutfits = outfits.length ? outfits : DEMO_OUTFITS;
@@ -676,14 +816,42 @@ export default function Home() {
   const archiveOutfits = visibleOutfits.filter(
     (outfit) => archiveScene === "全部" || outfit.category === archiveScene,
   );
-  const archiveCategories = ["全部", ...Array.from(new Set(visibleGarments.map((item) => item.category)))];
-  const archiveGarments = visibleGarments.filter(
-    (garment) => archiveCategory === "全部" || garment.category === archiveCategory,
-  );
+  const archiveSourceGarments = allGarments.length ? allGarments : DEMO_ITEMS;
+  const archiveCategories = [
+    "全部",
+    ...Array.from(new Set(archiveSourceGarments.map((item) => item.category))),
+    ...(removedGarments.length ? ["已出库"] : []),
+  ];
+  const archiveGarments = archiveSourceGarments.filter((garment) => {
+    if (archiveCategory === "全部") return true;
+    if (archiveCategory === "已出库") return garment.extra.status === "removed";
+    return garment.category === archiveCategory;
+  });
 
   function addEntry(entry: Entry) {
     setEntries((current) => [entry, ...current]);
     setUploadMode(null);
+  }
+
+  function updateEntry(entry: Entry) {
+    setEntries((current) => current.map((item) => (item.id === entry.id ? entry : item)));
+    setRemoveTarget(null);
+  }
+
+  function deleteEntry(id: string) {
+    setEntries((current) => current.filter((item) => item.id !== id));
+    setRemoveTarget(null);
+  }
+
+  async function restoreEntry(entry: Entry) {
+    const response = await fetch("/api/entries", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: entry.id, status: "active" }),
+    });
+    if (!response.ok) return;
+    const restored = (await response.json()) as Entry;
+    setEntries((current) => current.map((item) => (item.id === restored.id ? restored : item)));
   }
 
   return (
@@ -906,6 +1074,11 @@ export default function Home() {
                       {item.category} · {item.color || "未标颜色"}
                     </span>
                     <small>穿过 {item.wornCount} 次</small>
+                    {!item.isDemo && (
+                      <button className="garment-departure-button" onClick={() => setRemoveTarget(item)}>
+                        出库 / 已售
+                      </button>
+                    )}
                   </div>
                 </article>
               ))}
@@ -1096,12 +1269,20 @@ export default function Home() {
                   </div>
                   <div className="exhibition-grid">
                     {archiveGarments.map((garment, index) => (
-                      <article key={garment.id} className="exhibit-card">
+                      <article
+                        key={garment.id}
+                        className={`exhibit-card ${garment.extra.status === "removed" ? "removed" : ""}`}
+                      >
                         <div className="exhibit-number">
                           {String(index + 1).padStart(3, "0")}
                         </div>
                         <GarmentVisual item={garment} />
                         {garment.isDemo && <span className="archive-demo-mark">示例</span>}
+                        {garment.extra.status === "removed" && (
+                          <span className="removed-mark">
+                            {removalReasonLabel(garment.extra.removalReason)}
+                          </span>
+                        )}
                         <div className="exhibit-meta">
                           <strong>{garment.name}</strong>
                           <span>{garment.category} / {garment.color || "未标颜色"}</span>
@@ -1111,6 +1292,22 @@ export default function Home() {
                               month: "2-digit",
                             })} · 穿过 {garment.wornCount} 次
                           </small>
+                          {!garment.isDemo && garment.extra.status !== "removed" && (
+                            <button
+                              className="garment-departure-button"
+                              onClick={() => setRemoveTarget(garment)}
+                            >
+                              出库 / 已售
+                            </button>
+                          )}
+                          {garment.extra.status === "removed" && (
+                            <button
+                              className="garment-restore-button"
+                              onClick={() => restoreEntry(garment)}
+                            >
+                              重新入库
+                            </button>
+                          )}
                         </div>
                       </article>
                     ))}
@@ -1177,6 +1374,14 @@ export default function Home() {
         />
       )}
       {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}
+      {removeTarget && (
+        <RemoveGarmentModal
+          item={removeTarget}
+          onClose={() => setRemoveTarget(null)}
+          onUpdated={updateEntry}
+          onDeleted={deleteEntry}
+        />
+      )}
     </main>
   );
 }

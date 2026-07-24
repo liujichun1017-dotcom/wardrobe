@@ -1878,6 +1878,280 @@ select:focus-visible {
   }
 }
 
+/* Garment departure: preserve sold history or permanently delete. */
+.garment-departure-button,
+.garment-restore-button {
+  margin-top: 11px;
+  padding: 7px 9px;
+  border: 1px solid var(--ink);
+  background: transparent;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  cursor: pointer;
+}
+
+.garment-departure-button:hover {
+  background: #ed1c24;
+  color: white;
+}
+
+.garment-restore-button {
+  background: var(--ink);
+  color: white;
+}
+
+.exhibit-card.removed {
+  background: #d2d2cd;
+}
+
+.exhibit-card.removed > .garment-visual {
+  opacity: .45;
+  filter: grayscale(100%) contrast(.88);
+}
+
+.exhibit-card.removed::after {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  left: 8px;
+  right: 8px;
+  top: 48%;
+  height: 3px;
+  background: #ed1c24;
+  transform: rotate(-9deg);
+  pointer-events: none;
+}
+
+.removed-mark {
+  position: absolute;
+  z-index: 4;
+  top: 50px;
+  right: -2px;
+  padding: 6px 9px;
+  border: 2px solid var(--ink);
+  background: #ed1c24;
+  color: white;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .07em;
+}
+
+.remove-modal {
+  position: relative;
+  width: min(620px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 30px;
+  border: 3px solid var(--ink);
+  background: var(--paper);
+  box-shadow: 15px 15px 0 #ed1c24;
+  animation: rise-in 220ms ease-out;
+}
+
+.remove-modal h2 {
+  margin: 0;
+  font-family: "Arial Black", "PingFang SC", sans-serif;
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: -.07em;
+}
+
+.remove-garment-preview {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  border: 2px solid var(--ink);
+  background: white;
+}
+
+.remove-garment-preview > .garment-visual {
+  min-height: 145px;
+  border-right: 2px solid var(--ink);
+  filter: grayscale(100%);
+}
+
+.remove-garment-preview > div:last-child {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.remove-garment-preview span,
+.remove-garment-preview strong,
+.remove-garment-preview small {
+  display: block;
+}
+
+.remove-garment-preview span {
+  color: #ed1c24;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+
+.remove-garment-preview strong {
+  margin: 8px 0 13px;
+  font-family: "Arial Black", "PingFang SC", sans-serif;
+  font-size: 18px;
+}
+
+.remove-garment-preview small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.removal-reasons {
+  margin: 18px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: 0;
+  gap: 8px;
+}
+
+.removal-reasons legend {
+  width: 100%;
+  margin-bottom: 9px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.removal-reasons label {
+  position: relative;
+  min-height: 81px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border: 2px solid var(--ink);
+  background: white;
+  cursor: pointer;
+}
+
+.removal-reasons label.active {
+  background: var(--ink);
+  color: white;
+  box-shadow: 5px 5px 0 #ed1c24;
+  transform: translate(-2px, -2px);
+}
+
+.removal-reasons input {
+  position: absolute;
+  opacity: 0;
+}
+
+.removal-reasons span {
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.removal-reasons small {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.removal-reasons label.active small {
+  color: rgba(255,255,255,.55);
+}
+
+.retire-explainer {
+  margin: 16px 0;
+  padding: 12px 14px;
+  border-left: 6px solid #ed1c24;
+  background: #d8d8d3;
+}
+
+.retire-explainer strong {
+  font-size: 10px;
+}
+
+.retire-explainer p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.retire-confirm {
+  background: var(--ink);
+}
+
+.permanent-delete-link {
+  margin: 14px auto 0;
+  display: block;
+  border: 0;
+  border-bottom: 1px solid #8e3930;
+  background: transparent;
+  color: #8e3930;
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.permanent-delete-confirm {
+  margin-top: 14px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  border: 2px solid #ed1c24;
+  background: white;
+}
+
+.permanent-delete-confirm p {
+  grid-column: 1 / -1;
+  margin: 0 0 3px;
+  color: #8e3930;
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.permanent-delete-confirm button {
+  padding: 9px;
+  border: 2px solid var(--ink);
+  background: transparent;
+  font-size: 9px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.permanent-delete-confirm button:last-child {
+  border-color: #ed1c24;
+  background: #ed1c24;
+  color: white;
+}
+
+@media (max-width: 700px) {
+  .remove-modal {
+    width: 100%;
+    max-height: 93vh;
+    padding: 24px 18px 32px;
+    border-bottom: 0;
+    box-shadow: 0 -8px 0 #ed1c24;
+  }
+
+  .remove-garment-preview {
+    grid-template-columns: 95px 1fr;
+  }
+
+  .remove-garment-preview > .garment-visual {
+    min-height: 120px;
+  }
+
+  .removal-reasons {
+    grid-template-columns: 1fr;
+  }
+
+  .removal-reasons label {
+    min-height: 69px;
+  }
+}
+
 /* Personal archive: past OOTD timeline and garment exhibition. */
 .archive-portal {
   position: relative;

@@ -155,3 +155,75 @@ export async function POST(request: Request) {
 
   return Response.json(mapEntry(row), { status: 201 });
 }
+
+export async function PATCH(request: Request) {
+  const { DB } = getEnv();
+  await ensureSchema(DB);
+  const body = (await request.json()) as {
+    id?: string;
+    status?: "active" | "removed";
+    removalReason?: string;
+  };
+  const id = String(body.id || "");
+  if (!id || !["active", "removed"].includes(String(body.status))) {
+    return Response.json({ error: "Invalid wardrobe update" }, { status: 400 });
+  }
+
+  const row = await DB.prepare(
+    "SELECT * FROM entries WHERE id = ? AND kind = 'garment' LIMIT 1",
+  )
+    .bind(id)
+    .first<EntryRow>();
+  if (!row) {
+    return Response.json({ error: "Garment not found" }, { status: 404 });
+  }
+
+  let extra: Record<string, unknown> = {};
+  try {
+    extra = JSON.parse(row.extra_json || "{}") as Record<string, unknown>;
+  } catch {
+    extra = {};
+  }
+  const nextExtra = {
+    ...extra,
+    status: body.status,
+    removalReason: body.status === "removed" ? String(body.removalReason || "sold") : "",
+    removedAt: body.status === "removed" ? new Date().toISOString() : "",
+  };
+  const extraJson = JSON.stringify(nextExtra);
+
+  await DB.prepare("UPDATE entries SET extra_json = ? WHERE id = ?")
+    .bind(extraJson, id)
+    .run();
+
+  return Response.json(mapEntry({ ...row, extra_json: extraJson }), {
+    headers: { "Cache-Control": "no-store" },
+  });
+}
+
+export async function DELETE(request: Request) {
+  const { DB, GARMENTS } = getEnv();
+  await ensureSchema(DB);
+  const id = new URL(request.url).searchParams.get("id") || "";
+  if (!id) {
+    return Response.json({ error: "Garment id is required" }, { status: 400 });
+  }
+
+  const row = await DB.prepare(
+    "SELECT * FROM entries WHERE id = ? AND kind = 'garment' LIMIT 1",
+  )
+    .bind(id)
+    .first<EntryRow>();
+  if (!row) {
+    return Response.json({ error: "Garment not found" }, { status: 404 });
+  }
+
+  await DB.prepare("DELETE FROM entries WHERE id = ?").bind(id).run();
+  if (row.image_key) {
+    await GARMENTS.delete(row.image_key);
+  }
+
+  return Response.json({ deleted: true, id }, {
+    headers: { "Cache-Control": "no-store" },
+  });
+}
