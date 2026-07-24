@@ -1047,30 +1047,38 @@ function Home({ displayName }: { displayName: string }) {
   async function markLookWorn(outfit: Entry) {
     const today = new Date().toISOString().slice(0, 10);
     if (outfit.lastWornAt === today) return;
-    // 找到关联的衣物
+    // 找到关联的衣物（含 demo）
     const garmentIds = Array.isArray(outfit.extra.garmentIds)
       ? (outfit.extra.garmentIds as string[])
       : [];
+    const allSource = [...allGarments, ...DEMO_ITEMS];
     const linkedGarments = garmentIds
-      .map((id) => {
-        const found = garments.find((g) => g.id === id) || allGarments.find((g) => g.id === id);
-        return found && found.lastWornAt !== today ? found : undefined;
-      })
-      .filter((g): g is Entry => Boolean(g));
-    // 逐件 +1（不重复加今天的）
+      .map((id) => allSource.find((g) => g.id === id))
+      .filter((g): g is Entry => Boolean(g) && g.lastWornAt !== today);
+    // 逐件 +1（真实衣物写 DB，demo 衣物只更新前端 state）
     for (const g of linkedGarments) {
-      await supabase
-        .from("entries")
-        .update({ worn_count: (g.wornCount || 0) + 1, last_worn_at: today })
-        .eq("id", g.id)
-        .select()
-        .single()
-        .then(({ data }) => {
-          if (data) {
-            const updated = rowToEntry(data);
-            setEntries((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-          }
-        });
+      const isDemo = g.id.startsWith("demo-");
+      if (isDemo) {
+        // demo 衣物不在数据库，只更新前端
+        setEntries((current) =>
+          current.map((item) =>
+            item.id === g.id
+              ? { ...item, wornCount: (item.wornCount || 0) + 1, lastWornAt: today }
+              : item,
+          ),
+        );
+      } else {
+        const { data } = await supabase
+          .from("entries")
+          .update({ worn_count: (g.wornCount || 0) + 1, last_worn_at: today })
+          .eq("id", g.id)
+          .select()
+          .single();
+        if (data) {
+          const updated = rowToEntry(data);
+          setEntries((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+        }
+      }
     }
     // 造型本身标记穿过
     const { data: outfitData } = await supabase
