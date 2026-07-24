@@ -8,6 +8,9 @@ import {
   useRef,
   useState,
 } from "react";
+import { supabase, STORAGE_BUCKET } from "@/lib/supabase";
+import AuthGate from "@/app/AuthGate";
+import AddToHomeScreen from "@/app/AddToHomeScreen";
 
 type Tab = "today" | "closet" | "looks" | "ootd" | "consider";
 type EntryKind = "garment" | "outfit" | "wish";
@@ -28,6 +31,43 @@ type Entry = {
   createdAt: string;
   isDemo?: boolean;
 };
+
+type EntryRow = {
+  id: string;
+  kind: EntryKind;
+  name: string;
+  category: string;
+  color: string;
+  season: string;
+  worn_count: number;
+  last_worn_at: string | null;
+  image_key: string | null;
+  notes: string;
+  extra: Record<string, unknown> | null;
+  created_at: string;
+};
+
+function publicImageUrl(key: string): string {
+  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${key}`;
+}
+
+function rowToEntry(row: EntryRow): Entry {
+  const extra = (row.extra || {}) as Record<string, string | number | boolean | string[]>;
+  return {
+    id: row.id,
+    kind: row.kind,
+    name: row.name,
+    category: row.category,
+    color: row.color,
+    season: row.season,
+    wornCount: row.worn_count,
+    lastWornAt: row.last_worn_at,
+    imageUrl: row.image_key ? publicImageUrl(row.image_key) : null,
+    notes: row.notes,
+    extra,
+    createdAt: row.created_at,
+  };
+}
 
 const DEMO_ITEMS: Entry[] = [
   {
@@ -423,43 +463,64 @@ function UploadModal({
     setSaving(true);
     setError("");
     try {
-      const form = new FormData();
-      form.set("kind", mode);
-      form.set("name", name.trim());
-      form.set("category", category);
-      form.set("color", color.trim());
-      form.set("season", season);
-      form.set("notes", "");
-      form.set(
-        "extra",
-        JSON.stringify({
-          price,
-          cleaned: cleanBackground,
-          recommendation:
-            mode === "wish"
-              ? similar.length >= 3
-                ? "同类偏多，建议先用已有单品搭 3 套"
-                : similar.length > 0
-                  ? `已有 ${similar.length} 件相近单品，先比较版型与场景`
-                  : "衣橱里暂时没有明显重复，可以继续考虑"
-              : "",
-        }),
-      );
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
+      if (!userId) throw new Error("未登录");
 
+      const extra = {
+        price,
+        cleaned: cleanBackground,
+        recommendation:
+          mode === "wish"
+            ? similar.length >= 3
+              ? "同类偏多，建议先用已有单品搭 3 套"
+              : similar.length > 0
+                ? `已有 ${similar.length} 件相近单品，先比较版型与场景`
+                : "衣橱里暂时没有明显重复，可以继续考虑"
+            : "",
+      };
+
+      const createdAt = new Date().toISOString();
+      const { data: inserted, error: insertError } = await supabase
+        .from("entries")
+        .insert({
+          user_id: userId,
+          kind: mode,
+          name: name.trim(),
+          category,
+          color: color.trim(),
+          season,
+          notes: "",
+          extra,
+          last_worn_at: mode === "outfit" ? createdAt.slice(0, 10) : null,
+        })
+        .select()
+        .single();
+      if (insertError || !inserted) throw new Error("保存失败");
+
+      let imageKey: string | null = null;
       if (file) {
         const blob = await normalizeImage(file, cleanBackground);
-        form.set(
-          "image",
-          new File([blob], cleanBackground ? "cleaned.png" : "garment.webp", {
-            type: blob.type,
-          }),
-        );
+        const ext = cleanBackground ? "png" : "webp";
+        imageKey = `${userId}/${inserted.id}.${ext}`;
+        const { error: upErr } = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .upload(imageKey, blob, {
+            contentType: blob.type,
+            upsert: true,
+          });
+        if (upErr) throw new Error("图片上传失败");
+        const { data: updated, error: updErr } = await supabase
+          .from("entries")
+          .update({ image_key: imageKey })
+          .eq("id", inserted.id)
+          .select()
+          .single();
+        if (updErr || !updated) throw new Error("保存失败");
+        onSaved(rowToEntry(updated));
+      } else {
+        onSaved(rowToEntry(inserted));
       }
-
-      const response = await fetch("/api/entries", { method: "POST", body: form });
-      if (!response.ok) throw new Error("保存失败");
-      const saved = (await response.json()) as Entry;
-      onSaved(saved);
     } catch {
       setError("暂时没有保存成功，请稍后再试");
     } finally {
@@ -611,7 +672,21 @@ function UploadModal({
   );
 }
 
-function ProfileModal({ onClose }: { onClose: () => void }) {
+function ProfileModal({
+  displayName,
+  onSignOut,
+  onClose,
+}: {
+  displayName: string;
+  onSignOut: () => void;
+  onClose: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  async function signOut() {
+    setBusy(true);
+    await supabase.auth.signOut();
+    setBusy(false);
+  }
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section
@@ -623,14 +698,14 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
         <button className="close-button" onClick={onClose} aria-label="关闭">
           ×
         </button>
-        <div className="profile-orbit">衣</div>
-        <p className="eyebrow">PRIVATE BETA</p>
-        <h2>把衣橱带在身边</h2>
-        <p>现在是你的私人体验版。注册入口已经预留，开放多人使用时可同步到不同设备。</p>
-        <button className="primary-button wide" onClick={onClose}>
-          注册 / 开启云同步
+        <div className="profile-orbit">{displayName.slice(0, 1) || "衣"}</div>
+        <p className="eyebrow">SIGNED IN</p>
+        <h2>你好，{displayName}</h2>
+        <p>你的衣物和照片只属于你这个账号，不会出现在别人眼里。换设备登录后继续同步。</p>
+        <button className="primary-button wide" onClick={signOut} disabled={busy}>
+          {busy ? "处理中…" : "退出登录"}
         </button>
-        <small>当前版本的衣物照片已经安全保存在你的私人空间。</small>
+        <small>数据按账号隔离，安全保存在你的私人空间。</small>
       </section>
     </div>
   );
@@ -656,17 +731,20 @@ function RemoveGarmentModal({
     setBusy(true);
     setError("");
     try {
-      const response = await fetch("/api/entries", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: item.id,
-          status: "removed",
-          removalReason: reason,
-        }),
-      });
-      if (!response.ok) throw new Error("Unable to archive garment");
-      onUpdated((await response.json()) as Entry);
+      const extra = {
+        ...(item.extra || {}),
+        status: "removed",
+        removalReason: reason,
+        removedAt: new Date().toISOString(),
+      };
+      const { data, error } = await supabase
+        .from("entries")
+        .update({ extra })
+        .eq("id", item.id)
+        .select()
+        .single();
+      if (error || !data) throw new Error("Unable to archive garment");
+      onUpdated(rowToEntry(data));
     } catch {
       setError("暂时没有出库成功，请稍后再试");
     } finally {
@@ -678,10 +756,18 @@ function RemoveGarmentModal({
     setBusy(true);
     setError("");
     try {
-      const response = await fetch(`/api/entries?id=${encodeURIComponent(item.id)}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) throw new Error("Unable to delete garment");
+      if (item.imageUrl && item.id) {
+        // 图片 key 形如 userId/id.ext，无法直接还原，尝试按前缀删（容错）。
+        const { data: list } = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .list();
+        const mine = (list || []).filter((o) => o.name.includes(item.id));
+        if (mine.length) {
+          await supabase.storage.from(STORAGE_BUCKET).remove(mine.map((o) => o.name));
+        }
+      }
+      const { error } = await supabase.from("entries").delete().eq("id", item.id);
+      if (error) throw new Error("Unable to delete garment");
       onDeleted(item.id);
     } catch {
       setError("暂时没有删除成功，请稍后再试");
@@ -762,7 +848,7 @@ function RemoveGarmentModal({
   );
 }
 
-export default function Home() {
+function Home({ displayName }: { displayName: string }) {
   const [activeTab, setActiveTab] = useState<Tab>("today");
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -777,20 +863,16 @@ export default function Home() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/entries")
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Unable to load wardrobe");
-        return (await response.json()) as Entry[];
-      })
-      .then((data) => {
-        if (!cancelled) setEntries(data);
-      })
-      .catch(() => {
-        if (!cancelled) setEntries([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoaded(true);
-      });
+    (async () => {
+      const { data, error } = await supabase
+        .from("entries")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(500);
+      if (cancelled) return;
+      if (!error && data) setEntries(data.map(rowToEntry));
+      if (!cancelled) setLoaded(true);
+    })();
     return () => {
       cancelled = true;
     };
@@ -844,14 +926,31 @@ export default function Home() {
   }
 
   async function restoreEntry(entry: Entry) {
-    const response = await fetch("/api/entries", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: entry.id, status: "active" }),
-    });
-    if (!response.ok) return;
-    const restored = (await response.json()) as Entry;
+    const existing = entry.extra || {};
+    const { status: _status, removalReason: _r, removedAt: _t, ...rest } = existing as Record<string, unknown>;
+    const { data, error } = await supabase
+      .from("entries")
+      .update({ extra: rest })
+      .eq("id", entry.id)
+      .select()
+      .single();
+    if (error) return;
+    const restored = rowToEntry(data);
     setEntries((current) => current.map((item) => (item.id === restored.id ? restored : item)));
+  }
+
+  async function recordWorn(entry: Entry) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (entry.lastWornAt === today) return;
+    const { data, error } = await supabase
+      .from("entries")
+      .update({ worn_count: (entry.wornCount || 0) + 1, last_worn_at: today })
+      .eq("id", entry.id)
+      .select()
+      .single();
+    if (error) return;
+    const updated = rowToEntry(data);
+    setEntries((current) => current.map((item) => (item.id === updated.id ? updated : item)));
   }
 
   return (
@@ -867,7 +966,7 @@ export default function Home() {
             <span>＋</span> 录入单品
           </button>
           <button className="profile-button" onClick={() => setProfileOpen(true)} aria-label="账户">
-            LC
+            {displayName.slice(0, 1).toUpperCase()}
           </button>
         </div>
       </header>
@@ -1075,9 +1174,18 @@ export default function Home() {
                     </span>
                     <small>穿过 {item.wornCount} 次</small>
                     {!item.isDemo && (
-                      <button className="garment-departure-button" onClick={() => setRemoveTarget(item)}>
-                        出库 / 已售
-                      </button>
+                      <div className="garment-actions">
+                        <button
+                          className="garment-worn-button"
+                          onClick={() => recordWorn(item)}
+                          disabled={item.lastWornAt === new Date().toISOString().slice(0, 10)}
+                        >
+                          {item.lastWornAt === new Date().toISOString().slice(0, 10) ? "今天已记" : "今天穿了"}
+                        </button>
+                        <button className="garment-departure-button" onClick={() => setRemoveTarget(item)}>
+                          出库 / 已售
+                        </button>
+                      </div>
                     )}
                   </div>
                 </article>
@@ -1373,7 +1481,13 @@ export default function Home() {
           onSaved={addEntry}
         />
       )}
-      {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}
+      {profileOpen && (
+        <ProfileModal
+          displayName={displayName}
+          onSignOut={() => {}}
+          onClose={() => setProfileOpen(false)}
+        />
+      )}
       {removeTarget && (
         <RemoveGarmentModal
           item={removeTarget}
@@ -1383,5 +1497,31 @@ export default function Home() {
         />
       )}
     </main>
+  );
+}
+
+export default function App() {
+  const [user, setUser] = useState<import("@supabase/supabase-js").User | null | undefined>(undefined);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setUser(data.session?.user ?? null));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  if (user === undefined) {
+    return <main className="auth-shell"><div className="profile-orbit">衣</div></main>;
+  }
+  if (!user) {
+    return <AuthGate />;
+  }
+  const displayName = (user.email || "衣橱主人").split("@")[0];
+  return (
+    <>
+      <Home displayName={displayName} />
+      <AddToHomeScreen />
+    </>
   );
 }
