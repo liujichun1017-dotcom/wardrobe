@@ -4852,6 +4852,31 @@ body::before {
   width: 60px;
   flex: 0 0 auto;
 }
+/* 档案馆卡片删除按钮 */
+.archive-card-delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.archive-card-delete:hover {
+  background: rgba(192, 57, 43, 0.9);
+}
+.archive-look-card {
+  position: relative;
+}
 
 /* 衣物选择器弹层 */
 .look-picker-backdrop {

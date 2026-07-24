@@ -1514,6 +1514,13 @@ function Home({ displayName }: { displayName: string }) {
                       )}
                       {visibleSavedLooks.map((outfit, index) => (
                         <article key={outfit.id} className="archive-look-card">
+                          <button
+                            className="archive-card-delete"
+                            onClick={() => setRemoveTarget(outfit)}
+                            aria-label="删除"
+                          >
+                            ×
+                          </button>
                           <div className="archive-look-index">
                             <span>LOOK</span>
                             <strong>{String(index + 1).padStart(2, "0")}</strong>
