@@ -4526,6 +4526,27 @@ body::before {
     gap: 18px 12px;
   }
 
+  /* ---- 4b. 两列布局→纵向堆叠：今天页、造型页 ---- */
+  .today-grid,
+  .mix-layout {
+    grid-template-columns: 1fr !important;
+    gap: 20px;
+  }
+  .side-stack,
+  .palette-panel {
+    min-width: 0;
+  }
+  .summary-strip {
+    gap: 8px;
+    padding: 10px;
+  }
+  .summary-strip strong {
+    font-size: 20px;
+  }
+  .summary-strip span {
+    font-size: 11px;
+  }
+
   /* ---- 5. 卡片风格统一：去掉错位偏移 + 黑框 + 灰度，改干净圆角 ---- */
   .closet-card,
   .piece-card {
@@ -4633,15 +4654,26 @@ body::before {
     font-size: 20px;
   }
 
-  /* ---- 10. 底部导航 + 悬浮加号：确保不遮挡内容 ---- */
+  /* ---- 10. 底部导航：修顶格+字贴字，给图标和文字留呼吸空间 ---- */
   .app-shell {
-    padding-bottom: 100px;
+    padding-bottom: 110px;
+  }
+  .mobile-nav {
+    height: 64px;
+    padding: 0 4px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
   .mobile-nav button {
     min-width: 0;
-    font-size: 9px;
+    padding: 8px 2px !important;
+    gap: 5px !important;
+    font-size: 10px !important;
+    line-height: 1.2 !important;
   }
   .mobile-nav button span {
-    font-size: 16px;
+    width: 24px;
+    height: 24px;
+    font-size: 13px !important;
+    margin-bottom: 1px;
   }
 }
