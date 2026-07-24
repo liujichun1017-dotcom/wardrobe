@@ -1144,12 +1144,11 @@ function Home({ displayName }: { displayName: string }) {
         {activeTab === "today" && (
           <section className="today-page">
             <div className="hero-copy">
-              <p className="eyebrow">WARDROBE ARCHIVE / NO. 023</p>
+              <p className="eyebrow">我的衣橱</p>
               <h1>
                 今天，穿得
                 <em>不那么正确。</em>
               </h1>
-              <p>把衣服当成造型语言。先拆开、重组，再决定今天的轮廓。</p>
               {!garments.length && loaded && (
                 <button className="demo-badge" onClick={() => setUploadMode("garment")}>
                   现在展示的是示例衣橱 · 添加我的第一件
@@ -1178,28 +1177,22 @@ function Home({ displayName }: { displayName: string }) {
               <article className="outfit-feature">
                 <div className="section-head">
                   <div>
-                    <p className="eyebrow">LOOK CONSTRUCTION / 01</p>
+                    <p className="eyebrow">LOOK CONSTRUCTION</p>
                     <h2>今日造型实验</h2>
                   </div>
-                  <button onClick={() => setActiveTab("looks")}>换一套</button>
+                  <button onClick={() => setActiveTab("looks")}>去搭配</button>
                 </div>
                 <div className="look-canvas">
                   <div className="look-note">
-                    <span>ASYMMETRY / DAILY</span>
-                    <p>打破安全比例，用层次和体积重新组织基础款。</p>
+                    <p>从衣橱里挑几件，搭一套今天的造型。</p>
                   </div>
                   {visibleGarments.slice(0, 4).map((item, index) => (
                     <GarmentVisual key={item.id} item={item} className={`look-item look-item-${index + 1}`} />
                   ))}
                 </div>
                 <div className="look-footer">
-                  <div className="avatar-stack">
-                    {visibleGarments.slice(0, 3).map((item) => (
-                      <GarmentVisual key={item.id} item={item} />
-                    ))}
-                  </div>
                   <span>用你衣橱里的 {Math.min(4, visibleGarments.length)} 件单品</span>
-                  <button onClick={() => setUploadMode("outfit")}>穿这套并记录</button>
+                  <button onClick={() => setActiveTab("looks")}>开始搭配</button>
                 </div>
               </article>
 
