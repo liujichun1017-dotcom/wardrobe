@@ -4814,6 +4814,44 @@ body::before {
   font-size: 13px;
   margin-top: 10px;
 }
+.look-saved {
+  color: #2e7d32;
+  font-size: 14px;
+  margin-top: 10px;
+  font-weight: 600;
+}
+/* 档案馆：造型 vs OOTD 子 tab */
+.archive-outfit-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.archive-outfit-tabs button {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.archive-outfit-tabs button.active {
+  background: var(--ink);
+  color: white;
+  border-color: var(--ink);
+}
+/* 造型方案的关联衣物展示 */
+.look-linked {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px;
+}
+.look-linked .archive-layer {
+  width: 60px;
+  flex: 0 0 auto;
+}
 
 /* 衣物选择器弹层 */
 .look-picker-backdrop {

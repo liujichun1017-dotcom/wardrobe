@@ -287,6 +287,25 @@ function OutfitArchiveVisual({
     return <GarmentVisual item={outfit} className="archive-uploaded-look" />;
   }
 
+  // 造型方案：读 extra.garmentIds 找到关联衣物
+  const garmentIds = Array.isArray(outfit.extra.garmentIds)
+    ? (outfit.extra.garmentIds as string[])
+    : [];
+  const linkedGarments = garmentIds
+    .map((id) => garments.find((g) => g.id === id))
+    .filter((g): g is Entry => Boolean(g));
+
+  if (linkedGarments.length > 0) {
+    return (
+      <div className="archive-look-visual look-linked" aria-label={outfit.name}>
+        {linkedGarments.slice(0, 4).map((item, index) => (
+          <GarmentVisual key={`${outfit.id}-${item.id}`} item={item} className={`archive-layer layer-${index + 1}`} />
+        ))}
+      </div>
+    );
+  }
+
+  // demo 数据：用 offset 假拼贴
   const offset = Number(outfit.extra.demoOffset || 0);
   const pieces = Array.from({ length: Math.min(3, garments.length) }, (_, index) => {
     return garments[(offset + index) % garments.length];
@@ -924,6 +943,8 @@ function Home({ displayName }: { displayName: string }) {
   const [lookPickerFilter, setLookPickerFilter] = useState("全部");
   const [lookSaving, setLookSaving] = useState(false);
   const [lookError, setLookError] = useState("");
+  const [lookSaved, setLookSaved] = useState(false);
+  const [archiveOutfitView, setArchiveOutfitView] = useState<"looks" | "ootd">("looks");
 
   useEffect(() => {
     let cancelled = false;
@@ -948,6 +969,11 @@ function Home({ displayName }: { displayName: string }) {
   const visibleGarments = garments.length ? garments : DEMO_ITEMS;
   const outfits = entries.filter((entry) => entry.kind === "outfit");
   const visibleOutfits = outfits.length ? outfits : DEMO_OUTFITS;
+  // 造型方案 vs OOTD 照片分开
+  const savedLooks = outfits.filter((o) => o.extra.outfitType === "look");
+  const ootdPhotos = outfits.filter((o) => o.extra.outfitType !== "look");
+  const visibleSavedLooks = savedLooks.length ? savedLooks : [];
+  const visibleOotdPhotos = ootdPhotos.length ? ootdPhotos : [];
   const wishes = entries.filter((entry) => entry.kind === "wish");
   const longUnworn = visibleGarments
     .filter((item) => daysSince(item.lastWornAt) >= 30)
@@ -1087,6 +1113,8 @@ function Home({ displayName }: { displayName: string }) {
       setLookDraft([]);
       setLookName("");
       setLookScene("日常搭配");
+      setLookSaved(true);
+      setTimeout(() => setLookSaved(false), 3000);
     } catch {
       setLookError("保存失败，请稍后再试");
     } finally {
@@ -1401,6 +1429,9 @@ function Home({ displayName }: { displayName: string }) {
               </button>
             </div>
             {lookError && <p className="look-error">{lookError}</p>}
+            {lookSaved && (
+              <p className="look-saved">✓ 已保存！去「档案馆」的「造型方案」里能看到</p>
+            )}
 
             {lookPickerOpen && (
               <LookPicker
@@ -1453,67 +1484,99 @@ function Home({ displayName }: { displayName: string }) {
 
             {archiveView === "outfits" ? (
               <>
-                <div className="archive-toolbar">
-                  <div>
-                    <span>SCENE / 场景</span>
-                    {archiveScenes.map((scene) => (
-                      <button
-                        key={scene}
-                        className={archiveScene === scene ? "active" : ""}
-                        onClick={() => setArchiveScene(scene)}
-                      >
-                        {scene}
-                      </button>
-                    ))}
-                  </div>
-                  <p>
-                    <strong>{outfits.length}</strong>
-                    条真实记录
-                  </p>
+                <div className="archive-outfit-tabs">
+                  <button
+                    className={archiveOutfitView === "looks" ? "active" : ""}
+                    onClick={() => setArchiveOutfitView("looks")}
+                  >
+                    造型方案 ({savedLooks.length})
+                  </button>
+                  <button
+                    className={archiveOutfitView === "ootd" ? "active" : ""}
+                    onClick={() => setArchiveOutfitView("ootd")}
+                  >
+                    OOTD 照片 ({ootdPhotos.length})
+                  </button>
                 </div>
 
-                {!outfits.length && loaded && (
-                  <div className="archive-sample-note">
-                    下面先用示例展示档案馆的样子。记录第一套 OOTD 后，会自动换成你的照片。
+                {archiveOutfitView === "looks" ? (
+                  <div className="archive-year-block">
+                    <div className="archive-year">
+                      <span>造</span>
+                      <strong>型</strong>
+                      <small>LOOK<br />PLANS</small>
+                    </div>
+                    <div className="archive-look-grid">
+                      {visibleSavedLooks.length === 0 && loaded && (
+                        <div className="archive-sample-note">
+                          还没有保存的造型方案。去「造型」页拼一套吧。
+                        </div>
+                      )}
+                      {visibleSavedLooks.map((outfit, index) => (
+                        <article key={outfit.id} className="archive-look-card">
+                          <div className="archive-look-index">
+                            <span>LOOK</span>
+                            <strong>{String(index + 1).padStart(2, "0")}</strong>
+                          </div>
+                          <OutfitArchiveVisual outfit={outfit} garments={visibleGarments} />
+                          <div className="archive-look-meta">
+                            <time dateTime={outfit.createdAt}>
+                              {new Date(outfit.createdAt).toLocaleDateString("zh-CN", {
+                                month: "2-digit",
+                                day: "2-digit",
+                              })}
+                            </time>
+                            <div>
+                              <strong>{outfit.name}</strong>
+                              <span>{outfit.category}</span>
+                            </div>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="archive-year-block">
+                    <div className="archive-year">
+                      <span>20</span>
+                      <strong>26</strong>
+                      <small>WORN<br />ARCHIVE</small>
+                    </div>
+                    <div className="archive-look-grid">
+                      {visibleOotdPhotos.length === 0 && loaded && (
+                        <div className="archive-sample-note">
+                          还没有 OOTD 照片。点下方记录今天的穿搭。
+                        </div>
+                      )}
+                      {visibleOotdPhotos.map((outfit, index) => (
+                        <article key={outfit.id} className="archive-look-card">
+                          <div className="archive-look-index">
+                            <span>OOTD</span>
+                            <strong>{String(index + 1).padStart(2, "0")}</strong>
+                          </div>
+                          <OutfitArchiveVisual outfit={outfit} garments={visibleGarments} />
+                          <div className="archive-look-meta">
+                            <time dateTime={outfit.createdAt}>
+                              {new Date(outfit.createdAt).toLocaleDateString("zh-CN", {
+                                month: "2-digit",
+                                day: "2-digit",
+                              })}
+                            </time>
+                            <div>
+                              <strong>{outfit.name}</strong>
+                              <span>{outfit.category} / {outfit.season}</span>
+                            </div>
+                          </div>
+                        </article>
+                      ))}
+                      <button className="archive-add-look" onClick={() => setUploadMode("outfit")}>
+                        <span>＋</span>
+                        <strong>ADD LOOK</strong>
+                        <small>记录下一套 OOTD</small>
+                      </button>
+                    </div>
                   </div>
                 )}
-
-                <div className="archive-year-block">
-                  <div className="archive-year">
-                    <span>20</span>
-                    <strong>26</strong>
-                    <small>WORN<br />ARCHIVE</small>
-                  </div>
-                  <div className="archive-look-grid">
-                    {archiveOutfits.map((outfit, index) => (
-                      <article key={outfit.id} className="archive-look-card">
-                        <div className="archive-look-index">
-                          <span>LOOK</span>
-                          <strong>{String(index + 1).padStart(2, "0")}</strong>
-                        </div>
-                        <OutfitArchiveVisual outfit={outfit} garments={visibleGarments} />
-                        {outfit.isDemo && <span className="archive-demo-mark">示例</span>}
-                        <div className="archive-look-meta">
-                          <time dateTime={outfit.createdAt}>
-                            {new Date(outfit.createdAt).toLocaleDateString("zh-CN", {
-                              month: "2-digit",
-                              day: "2-digit",
-                            })}
-                          </time>
-                          <div>
-                            <strong>{outfit.name}</strong>
-                            <span>{outfit.category} / {outfit.season}</span>
-                          </div>
-                        </div>
-                      </article>
-                    ))}
-                    <button className="archive-add-look" onClick={() => setUploadMode("outfit")}>
-                      <span>＋</span>
-                      <strong>ADD LOOK</strong>
-                      <small>记录下一套 OOTD</small>
-                    </button>
-                  </div>
-                </div>
               </>
             ) : (
               <>
