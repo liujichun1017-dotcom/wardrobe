@@ -1043,6 +1043,45 @@ function Home({ displayName }: { displayName: string }) {
     setEntries((current) => current.map((item) => (item.id === updated.id ? updated : item)));
   }
 
+  // 造型方案"标记今天穿了"：给关联的所有衣物 +1 穿着计数，造型本身标记穿过日期
+  async function markLookWorn(outfit: Entry) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (outfit.lastWornAt === today) return;
+    // 找到关联的衣物
+    const garmentIds = Array.isArray(outfit.extra.garmentIds)
+      ? (outfit.extra.garmentIds as string[])
+      : [];
+    const linkedGarments = garmentIds
+      .map((id) => garments.find((g) => g.id === id))
+      .filter((g): g is Entry => Boolean(g) && g.lastWornAt !== today);
+    // 逐件 +1（不重复加今天的）
+    for (const g of linkedGarments) {
+      await supabase
+        .from("entries")
+        .update({ worn_count: (g.wornCount || 0) + 1, last_worn_at: today })
+        .eq("id", g.id)
+        .select()
+        .single()
+        .then(({ data }) => {
+          if (data) {
+            const updated = rowToEntry(data);
+            setEntries((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+          }
+        });
+    }
+    // 造型本身标记穿过
+    const { data: outfitData } = await supabase
+      .from("entries")
+      .update({ last_worn_at: today })
+      .eq("id", outfit.id)
+      .select()
+      .single();
+    if (outfitData) {
+      const updated = rowToEntry(outfitData);
+      setEntries((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+    }
+  }
+
   // 造型页：预填几件衣物（按品类各抽一件）
   function prefillLookDraft() {
     const source = garments.length ? garments : visibleGarments;
@@ -1531,6 +1570,12 @@ function Home({ displayName }: { displayName: string }) {
                               <span>{outfit.category}</span>
                             </div>
                           </div>
+                          <button
+                            className={`look-worn-btn ${outfit.lastWornAt === new Date().toISOString().slice(0, 10) ? "done" : ""}`}
+                            onClick={() => markLookWorn(outfit)}
+                          >
+                            {outfit.lastWornAt === new Date().toISOString().slice(0, 10) ? "✓ 今天已穿" : "今天穿了"}
+                          </button>
                         </article>
                       ))}
                     </div>
