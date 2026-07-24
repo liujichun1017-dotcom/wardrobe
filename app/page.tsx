@@ -573,7 +573,6 @@ function UploadModal({
             className="sr-only"
             type="file"
             accept="image/*"
-            capture={mode === "garment" ? "environment" : undefined}
             onChange={pickFile}
           />
 
