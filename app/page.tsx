@@ -338,6 +338,64 @@ function Nav({
   );
 }
 
+function LookPicker({
+  garments,
+  selectedIds,
+  onToggle,
+  onClose,
+  filter,
+  setFilter,
+}: {
+  garments: Entry[];
+  selectedIds: string[];
+  onToggle: (item: Entry) => void;
+  onClose: () => void;
+  filter: string;
+  setFilter: (f: string) => void;
+}) {
+  const pickerCats = ["全部", ...Array.from(new Set(garments.map((g) => g.category)))];
+  const list = garments.filter(
+    (g) => filter === "全部" || g.category === filter,
+  );
+  return (
+    <div className="look-picker-backdrop" onClick={onClose}>
+      <div className="look-picker" onClick={(e) => e.stopPropagation()}>
+        <div className="look-picker-head">
+          <strong>选择单品</strong>
+          <button onClick={onClose}>完成</button>
+        </div>
+        <div className="look-picker-filter filter-chips">
+          {pickerCats.map((cat) => (
+            <button
+              key={cat}
+              className={filter === cat ? "active" : ""}
+              onClick={() => setFilter(cat)}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+        <div className="look-picker-grid">
+          {list.map((item) => {
+            const selected = selectedIds.includes(item.id);
+            return (
+              <button
+                key={item.id}
+                className={`look-picker-item ${selected ? "selected" : ""}`}
+                onClick={() => onToggle(item)}
+              >
+                <GarmentVisual item={item} />
+                <span>{item.name}</span>
+                {selected && <i className="check">✓</i>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function normalizeImage(file: File, removeBackground: boolean): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -859,6 +917,13 @@ function Home({ displayName }: { displayName: string }) {
   const [archiveCategory, setArchiveCategory] = useState("全部");
   const [removeTarget, setRemoveTarget] = useState<Entry | null>(null);
   const [query, setQuery] = useState("");
+  const [lookDraft, setLookDraft] = useState<Entry[]>([]);
+  const [lookName, setLookName] = useState("");
+  const [lookScene, setLookScene] = useState("日常搭配");
+  const [lookPickerOpen, setLookPickerOpen] = useState(false);
+  const [lookPickerFilter, setLookPickerFilter] = useState("全部");
+  const [lookSaving, setLookSaving] = useState(false);
+  const [lookError, setLookError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -950,6 +1015,83 @@ function Home({ displayName }: { displayName: string }) {
     if (error) return;
     const updated = rowToEntry(data);
     setEntries((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+  }
+
+  // 造型页：预填几件衣物（按品类各抽一件）
+  function prefillLookDraft() {
+    const source = garments.length ? garments : visibleGarments;
+    const byCategory = new Map<string, Entry>();
+    for (const item of source) {
+      if (item.extra.status === "removed") continue;
+      if (!byCategory.has(item.category)) byCategory.set(item.category, item);
+    }
+    setLookDraft(Array.from(byCategory.values()).slice(0, 5));
+  }
+
+  // 切到造型页时自动预填（仅当画布为空）
+  useEffect(() => {
+    if (activeTab === "looks" && lookDraft.length === 0) {
+      prefillLookDraft();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  // 造型页：切换衣物选中
+  function toggleLookItem(item: Entry) {
+    setLookDraft((current) => {
+      const exists = current.some((g) => g.id === item.id);
+      if (exists) return current.filter((g) => g.id !== item.id);
+      return [...current, item];
+    });
+  }
+
+  // 造型页：保存
+  async function saveLook() {
+    if (!lookName.trim()) {
+      setLookError("先给这套搭配起个名字吧");
+      return;
+    }
+    if (lookDraft.length === 0) {
+      setLookError("至少选一件衣物");
+      return;
+    }
+    setLookSaving(true);
+    setLookError("");
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
+      if (!userId) throw new Error("未登录");
+      const { data: inserted, error: insertError } = await supabase
+        .from("entries")
+        .insert({
+          user_id: userId,
+          kind: "outfit",
+          name: lookName.trim(),
+          category: lookScene,
+          color: "",
+          season: "四季",
+          notes: "",
+          extra: {
+            garmentIds: lookDraft.map((g) => g.id),
+            outfitType: "look",
+            price: "",
+            cleaned: false,
+            recommendation: "",
+          },
+          last_worn_at: null,
+        })
+        .select()
+        .single();
+      if (insertError || !inserted) throw new Error("保存失败");
+      addEntry(rowToEntry(inserted));
+      setLookDraft([]);
+      setLookName("");
+      setLookScene("日常搭配");
+    } catch {
+      setLookError("保存失败，请稍后再试");
+    } finally {
+      setLookSaving(false);
+    }
   }
 
   return (
@@ -1199,45 +1341,77 @@ function Home({ displayName }: { displayName: string }) {
               <div>
                 <p className="eyebrow">DECONSTRUCT / RECONSTRUCT</p>
                 <h1>造型实验室</h1>
-                <p>把衣橱里的单品放在一起，先看感觉，再决定上身。</p>
+                <p>从衣橱选单品，拼一套搭配，保存起来。</p>
               </div>
-              <button className="primary-button" onClick={() => setUploadMode("outfit")}>
-                记录为 OOTD
-              </button>
             </div>
-            <div className="mix-layout">
-              <div className="mix-canvas">
-                <div className="canvas-top">
-                  <span>LOOK 01</span>
-                  <strong>轻松通勤</strong>
-                  <button>重新组合</button>
-                </div>
-                <div className="mix-board">
-                  {visibleGarments.slice(0, 5).map((item, index) => (
-                    <div className={`mix-piece mix-${index + 1}`} key={item.id}>
+
+            <div className="look-builder">
+              <label className="field">
+                <span>搭配名称</span>
+                <input
+                  value={lookName}
+                  onChange={(e) => setLookName(e.target.value)}
+                  placeholder="例如：周四的轻松通勤"
+                />
+              </label>
+              <label className="field">
+                <span>场景</span>
+                <select value={lookScene} onChange={(e) => setLookScene(e.target.value)}>
+                  <option>日常搭配</option>
+                  <option>通勤</option>
+                  <option>约会</option>
+                  <option>旅行</option>
+                  <option>运动</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="look-canvas-new">
+              {lookDraft.length === 0 ? (
+                <div className="look-empty">点下方按钮，从衣橱添加单品</div>
+              ) : (
+                <div className="look-pieces">
+                  {lookDraft.map((item) => (
+                    <div className="look-piece" key={item.id}>
+                      <button
+                        className="look-piece-remove"
+                        onClick={() => toggleLookItem(item)}
+                        aria-label="移除"
+                      >
+                        ×
+                      </button>
                       <GarmentVisual item={item} />
                       <span>{item.name}</span>
                     </div>
                   ))}
-                  <div className="style-caption">干净 / 松弛 / 有一点海风</div>
                 </div>
-              </div>
-              <aside className="palette-panel">
-                <p className="eyebrow">COLOR STORY</p>
-                <h3>这一套的颜色</h3>
-                <div className="color-row">
-                  <i style={{ background: "#f4f0e8" }} />
-                  <i style={{ background: "#d8c6aa" }} />
-                  <i style={{ background: "#8097a6" }} />
-                  <i style={{ background: "#34322f" }} />
-                </div>
-                <p>明度接近、冷暖平衡，适合不需要太正式的通勤或周末见面。</p>
-                <div className="weather-note">
-                  <span>29°</span>
-                  <p>轻薄透气<br />室内可加一件外搭</p>
-                </div>
-              </aside>
+              )}
             </div>
+
+            <div className="look-actions">
+              <button className="look-add-btn" onClick={() => setLookPickerOpen(true)}>
+                <span>＋</span> 添加单品
+              </button>
+              <button
+                className="primary-button"
+                onClick={saveLook}
+                disabled={lookSaving}
+              >
+                {lookSaving ? "保存中…" : "保存这套搭配"}
+              </button>
+            </div>
+            {lookError && <p className="look-error">{lookError}</p>}
+
+            {lookPickerOpen && (
+              <LookPicker
+                garments={garments.length ? garments : visibleGarments}
+                selectedIds={lookDraft.map((g) => g.id)}
+                onToggle={toggleLookItem}
+                onClose={() => setLookPickerOpen(false)}
+                filter={lookPickerFilter}
+                setFilter={setLookPickerFilter}
+              />
+            )}
           </section>
         )}
 

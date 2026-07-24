@@ -4709,3 +4709,208 @@ body::before {
     margin-bottom: 1px;
   }
 }
+
+/* ============================================================
+   造型页新功能样式
+   ============================================================ */
+.look-builder {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.look-builder .field {
+  flex: 1;
+  min-width: 0;
+}
+.look-builder input,
+.look-builder select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  font-size: 14px;
+}
+.look-canvas-new {
+  min-height: 180px;
+  border: 2px dashed var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 20px;
+  background: rgba(255, 255, 255, 0.4);
+}
+.look-empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 40px 0;
+  font-size: 14px;
+}
+.look-pieces {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 8px;
+}
+.look-pieces::-webkit-scrollbar {
+  display: none;
+}
+.look-piece {
+  flex: 0 0 auto;
+  width: 110px;
+  position: relative;
+}
+.look-piece .garment-visual {
+  aspect-ratio: 0.88;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.look-piece span {
+  display: block;
+  font-size: 12px;
+  margin-top: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.look-piece-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--ink);
+  color: white;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.look-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.look-add-btn {
+  padding: 12px 18px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+.look-add-btn span {
+  margin-right: 4px;
+}
+.look-error {
+  color: #c0392b;
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+/* 衣物选择器弹层 */
+.look-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.look-picker {
+  width: 100%;
+  max-width: 560px;
+  max-height: 85vh;
+  background: var(--paper);
+  border-radius: 20px 20px 0 0;
+  padding: 20px 16px 28px;
+  overflow-y: auto;
+}
+.look-picker-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.look-picker-head strong {
+  font-size: 18px;
+}
+.look-picker-head button {
+  border: 0;
+  background: var(--ink);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.look-picker-filter {
+  margin-bottom: 16px;
+}
+.look-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.look-picker-item {
+  position: relative;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background: var(--card);
+  padding: 8px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 120ms ease;
+}
+.look-picker-item.selected {
+  border-color: var(--ink);
+}
+.look-picker-item .garment-visual {
+  aspect-ratio: 0.88;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.look-picker-item span {
+  display: block;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.look-picker-item .check {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: white;
+  font-size: 12px;
+  font-style: normal;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 700px) {
+  .look-builder {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .look-picker-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .look-piece {
+    width: 100px;
+  }
+}
