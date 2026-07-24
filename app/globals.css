@@ -4462,3 +4462,63 @@ body::before {
     padding-top: env(safe-area-inset-top);
   }
 }
+
+/* ============================================================
+   手机布局修复（追加在文件末尾，覆盖 set-1/set-2 的手机规则）
+   仅 ≤700px 生效，不影响桌面端。修：
+   1. 衣橱/单品网格 3→2 列（原 700px 漏降列，卡片挤成 ~110px）
+   2. 搜索框固定 260px → 自适应，整行可换行
+   3. 页面标题行 flex 不换行 → 纵向堆叠
+   4. 关掉卡片错位偏移 + 横向溢出安全网
+   ============================================================ */
+@media (max-width: 700px) {
+  /* 横向溢出安全网：任何意外撑宽都不产生横向滚动 */
+  html,
+  body {
+    overflow-x: hidden;
+  }
+
+  /* 衣橱卡片、近期单品：降到 2 列，卡片有合理宽度 */
+  .closet-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px 12px;
+  }
+  .piece-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px 12px;
+  }
+
+  /* 2 列布局下关掉纵向错位偏移，避免卡片高低不齐 */
+  .closet-card,
+  .piece-card {
+    transform: none;
+  }
+
+  /* 搜索 + 筛选：整行可换行，搜索框占满一行 */
+  .closet-tools {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .search-box {
+    width: 100%;
+    flex: 1 1 100%;
+  }
+
+  /* 页面标题行：纵向堆叠，标题不再把按钮顶出屏 */
+  .page-title-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .page-title-row .primary-button {
+    align-self: flex-start;
+  }
+  .inner-page h1 {
+    font-size: clamp(34px, 9vw, 44px);
+  }
+
+  /* 首页大标题：去掉斜体 em 的右偏移，防衬线字撑出屏 */
+  .hero-copy h1 em {
+    transform: none;
+  }
+}
