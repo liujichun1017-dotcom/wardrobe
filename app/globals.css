@@ -4536,6 +4536,38 @@ body::before {
   .palette-panel {
     min-width: 0;
   }
+
+  /* ---- 4c. 今日造型实验：关掉小图绝对定位遮盖，改正常流式排列 ---- */
+  .look-canvas {
+    min-height: auto !important;
+    display: flex !important;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px;
+  }
+  .look-note {
+    position: static !important;
+    width: 100% !important;
+    order: -1;
+  }
+  .look-item,
+  .look-item-1,
+  .look-item-2,
+  .look-item-3,
+  .look-item-4 {
+    position: static !important;
+    transform: none !important;
+    width: 100% !important;
+    height: auto !important;
+  }
+  .look-item .garment-visual {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 0.88;
+  }
+  .look-footer {
+    position: static;
+  }
   .summary-strip {
     gap: 8px;
     padding: 10px;
