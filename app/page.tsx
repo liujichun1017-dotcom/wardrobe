@@ -1052,8 +1052,11 @@ function Home({ displayName }: { displayName: string }) {
       ? (outfit.extra.garmentIds as string[])
       : [];
     const linkedGarments = garmentIds
-      .map((id) => garments.find((g) => g.id === id))
-      .filter((g): g is Entry => Boolean(g) && g.lastWornAt !== today);
+      .map((id) => {
+        const found = garments.find((g) => g.id === id) || allGarments.find((g) => g.id === id);
+        return found && found.lastWornAt !== today ? found : undefined;
+      })
+      .filter((g): g is Entry => Boolean(g));
     // 逐件 +1（不重复加今天的）
     for (const g of linkedGarments) {
       await supabase
