@@ -252,72 +252,6 @@ const REMOVAL_REASONS = [
   { id: "retired", label: "其他原因", note: "损坏、淘汰或暂时不再拥有" },
 ];
 
-type GarmentRole = "top" | "bottom" | "layer" | "onepiece" | "shoe" | "accessory" | "swim" | "other";
-
-const LOOK_SUGGESTION_NAMES = ["黑白层次", "体积错位", "克制留白"];
-
-function garmentRole(category: string): GarmentRole {
-  if (["T恤", "衬衫", "针织"].includes(category)) return "top";
-  if (["长裤", "短裤"].includes(category)) return "bottom";
-  if (category === "外套") return "layer";
-  if (category === "裙装") return "onepiece";
-  if (category === "鞋履") return "shoe";
-  if (["包袋", "配饰", "帽子", "围巾", "腰带", "首饰"].includes(category)) return "accessory";
-  if (["泳装", "泳帽"].includes(category)) return "swim";
-  return "other";
-}
-
-function buildLookSuggestions(seed: Entry, wardrobe: Entry[]): Entry[][] {
-  const active = wardrobe.filter(
-    (item, index, list) =>
-      item.kind === "garment" &&
-      item.extra.status !== "removed" &&
-      list.findIndex((candidate) => candidate.id === item.id) === index,
-  );
-  const seedRole = garmentRole(seed.category);
-  const templates: Record<GarmentRole, GarmentRole[]> = {
-    top: ["layer", "top", "bottom", "shoe", "accessory"],
-    bottom: ["layer", "top", "bottom", "shoe", "accessory"],
-    layer: ["layer", "top", "bottom", "shoe", "accessory"],
-    onepiece: ["layer", "onepiece", "shoe", "accessory"],
-    shoe: ["layer", "top", "bottom", "shoe", "accessory"],
-    accessory: ["layer", "top", "bottom", "shoe", "accessory"],
-    swim: ["swim", "accessory", "shoe"],
-    other: ["layer", "top", "bottom", "other", "shoe", "accessory"],
-  };
-
-  const suggestions: Entry[][] = [];
-  for (let variant = 0; variant < 3; variant += 1) {
-    const used = new Set<string>();
-    const suggestion: Entry[] = [];
-    for (const role of templates[seedRole]) {
-      let chosen: Entry | undefined;
-      if (role === seedRole && !used.has(seed.id)) {
-        chosen = seed;
-      } else {
-        const candidates = active
-          .filter((item) => !used.has(item.id) && garmentRole(item.category) === role)
-          .sort((a, b) => {
-            const seasonA = a.season === seed.season || a.season === "四季" ? 1 : 0;
-            const seasonB = b.season === seed.season || b.season === "四季" ? 1 : 0;
-            return seasonB - seasonA || a.wornCount - b.wornCount || a.name.localeCompare(b.name, "zh-CN");
-          });
-        chosen = candidates.length ? candidates[variant % candidates.length] : undefined;
-      }
-      if (chosen) {
-        used.add(chosen.id);
-        suggestion.push(chosen);
-      }
-    }
-    if (!used.has(seed.id)) suggestion.unshift(seed);
-    const key = suggestion.map((item) => item.id).join("|");
-    if (suggestion.length && !suggestions.some((look) => look.map((item) => item.id).join("|") === key)) {
-      suggestions.push(suggestion);
-    }
-  }
-  return suggestions;
-}
-
 function removalReasonLabel(reason: unknown) {
   return REMOVAL_REASONS.find((item) => item.id === reason)?.label || "已出库";
 }
@@ -1152,9 +1086,6 @@ function Home({ displayName }: { displayName: string }) {
   const [lookSaving, setLookSaving] = useState(false);
   const [lookError, setLookError] = useState("");
   const [lookSaved, setLookSaved] = useState(false);
-  const [lookSuggestionSeed, setLookSuggestionSeed] = useState<Entry | null>(null);
-  const [lookSuggestions, setLookSuggestions] = useState<Entry[][]>([]);
-  const [lookSuggestionIndex, setLookSuggestionIndex] = useState(0);
   const [archiveOutfitView, setArchiveOutfitView] = useState<"looks" | "ootd">("looks");
 
   useEffect(() => {
@@ -1231,20 +1162,6 @@ function Home({ displayName }: { displayName: string }) {
   function addEntry(entry: Entry, message?: string) {
     setEntries((current) => [entry, ...current]);
     setUploadMode(null);
-    if (entry.kind === "garment") {
-      const suggestions = buildLookSuggestions(entry, [entry, ...garments]);
-      const firstSuggestion = suggestions[0] || [entry];
-      setLookSuggestionSeed(entry);
-      setLookSuggestions(suggestions.length ? suggestions : [[entry]]);
-      setLookSuggestionIndex(0);
-      setLookDraft(firstSuggestion);
-      setLookName(`${entry.name} / ${LOOK_SUGGESTION_NAMES[0]}`);
-      setLookScene("日常搭配");
-      setLookError("");
-      setActiveTab("looks");
-      setNotice(message || "衣物已保存，并为它生成了一套搭配建议。");
-      return;
-    }
     setNotice(message || "已保存到你的衣橱档案。");
   }
 
@@ -1371,17 +1288,6 @@ function Home({ displayName }: { displayName: string }) {
     });
   }
 
-  function showNextLookSuggestion() {
-    if (!lookSuggestionSeed || lookSuggestions.length < 2) return;
-    const nextIndex = (lookSuggestionIndex + 1) % lookSuggestions.length;
-    setLookSuggestionIndex(nextIndex);
-    setLookDraft(lookSuggestions[nextIndex]);
-    setLookName(
-      `${lookSuggestionSeed.name} / ${LOOK_SUGGESTION_NAMES[nextIndex % LOOK_SUGGESTION_NAMES.length]}`,
-    );
-    setLookError("");
-  }
-
   // 造型页：保存
   async function saveLook() {
     if (!lookName.trim()) {
@@ -1432,9 +1338,6 @@ function Home({ displayName }: { displayName: string }) {
       setLookDraft([]);
       setLookName("");
       setLookScene("日常搭配");
-      setLookSuggestionSeed(null);
-      setLookSuggestions([]);
-      setLookSuggestionIndex(0);
       setLookSaved(true);
       setTimeout(() => setLookSaved(false), 3000);
     } catch {
@@ -1694,23 +1597,6 @@ function Home({ displayName }: { displayName: string }) {
                 <p>从衣橱选单品，拼一套搭配，保存起来。</p>
               </div>
             </div>
-
-            {lookSuggestionSeed && (
-              <div className="look-suggestion-banner" role="status">
-                <div>
-                  <p className="eyebrow">NEW GARMENT / LOOK SUGGESTION</p>
-                  <strong>围绕「{lookSuggestionSeed.name}」拼好了搭配草案</strong>
-                  <span>
-                    使用的都是你真实录入、仍在衣橱里的单品。可以继续增删，再保存为造型方案。
-                  </span>
-                </div>
-                {lookSuggestions.length > 1 && (
-                  <button onClick={showNextLookSuggestion}>
-                    换一套 · {lookSuggestionIndex + 1}/{lookSuggestions.length}
-                  </button>
-                )}
-              </div>
-            )}
 
             <div className="look-builder">
               <label className="field">
