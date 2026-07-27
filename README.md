@@ -16,7 +16,11 @@ npm run dev
 
 ## 图片与白底处理
 
-照片存储在 Supabase Storage 的 `garments` 存储桶中。设置服务端环境变量 `REMOVE_BG_API_KEY` 后，上传衣物时可调用 remove.bg 自动抠图并铺白底；没有配置或服务暂不可用时，应用会保留压缩后的原图，不会阻断保存。
+照片存储在 Supabase Storage 的 `garments` 存储桶中。衣物白底处理使用
+`@imgly/background-removal` 在浏览器本地完成，不需要 API Key，照片不会发送给第三方抠图服务。
+模型文件由本站的 `/bg-model/1.7.0/` 路径提供；首次使用约需加载 55MB，浏览器缓存后可重复使用。
+如果设备性能不足或处理失败，应用会保留压缩后的原图，不会阻断保存。
+本地抠图依赖 `@imgly/background-removal`，按其 AGPL-3.0 许可证使用；应用内提供本仓库源码入口。
 
 ## 上线
 
@@ -24,6 +28,5 @@ npm run dev
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `REMOVE_BG_API_KEY`（可选）
 
 提交并推送 `main` 后会触发生产部署。

@@ -481,20 +481,41 @@ function scaleToBlob(file: File): Promise<Blob> {
   });
 }
 
-// 调服务端代理 /api/remove-bg 拿透明 PNG（API key 只在服务端持有）
-async function removeBackgroundViaApi(image: Blob): Promise<Blob> {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
-  if (!token) throw new Error("bg-failed");
-  const fd = new FormData();
-  fd.append("image", image);
-  const res = await fetch("/api/remove-bg", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-    body: fd,
+type ImageProcessProgress = (message: string) => void;
+
+// 模型和照片都在浏览器内处理。模型文件由本站托管，照片不会发给第三方抠图服务。
+async function removeBackgroundLocally(
+  image: Blob,
+  onProgress?: ImageProcessProgress,
+): Promise<Blob> {
+  onProgress?.("正在载入本地抠图引擎…");
+  const { removeBackground } = await import("@imgly/background-removal");
+  return removeBackground(image, {
+    publicPath: `${window.location.origin}/bg-model/1.7.0/`,
+    model: "isnet_quint8",
+    device: "cpu",
+    output: {
+      format: "image/png",
+      quality: 1,
+    },
+    progress: (key: string, current: number, total: number) => {
+      if (key.startsWith("fetch:")) {
+        const percent = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
+        const label = key.includes("/models/")
+          ? "首次加载本地抠图模型"
+          : "正在准备本地抠图引擎";
+        onProgress?.(`${label} ${percent}%`);
+        return;
+      }
+      const computeMessages: Record<string, string> = {
+        "compute:decode": "正在读取照片…",
+        "compute:inference": "正在本机识别衣物轮廓…",
+        "compute:mask": "正在清理衣物边缘…",
+        "compute:encode": "正在生成白底照片…",
+      };
+      onProgress?.(computeMessages[key] || "正在本机处理照片…");
+    },
   });
-  if (!res.ok) throw new Error("bg-failed");
-  return await res.blob();
 }
 
 // 把透明 PNG 合成到纯白底，输出 jpg
@@ -544,13 +565,19 @@ type ProcessedImage = {
   notice?: string;
 };
 
-async function normalizeImage(file: File, removeBackground: boolean): Promise<ProcessedImage> {
+async function normalizeImage(
+  file: File,
+  removeBackground: boolean,
+  onProgress?: ImageProcessProgress,
+): Promise<ProcessedImage> {
+  onProgress?.("正在压缩照片…");
   const scaled = await scaleToBlob(file);
   if (!removeBackground) {
     return { blob: scaled, cleaned: false, extension: "webp" };
   }
   try {
-    const transparent = await removeBackgroundViaApi(scaled);
+    const transparent = await removeBackgroundLocally(scaled, onProgress);
+    onProgress?.("正在铺设纯白背景…");
     const whiteBackground = await compositeOnWhite(transparent);
     return { blob: whiteBackground, cleaned: true, extension: "jpg" };
   } catch {
@@ -558,7 +585,7 @@ async function normalizeImage(file: File, removeBackground: boolean): Promise<Pr
       blob: scaled,
       cleaned: false,
       extension: "webp",
-      notice: "衣物已保存，但白底服务暂时不可用，所以保留了原图。",
+      notice: "本地抠图没有完成，已安全保留原图；照片没有发送给第三方。",
     };
   }
 }
@@ -578,6 +605,7 @@ function UploadModal({
   const [preview, setPreview] = useState("");
   const [cleanBackground, setCleanBackground] = useState(mode !== "outfit");
   const [saving, setSaving] = useState(false);
+  const [processingMessage, setProcessingMessage] = useState("");
   const [error, setError] = useState("");
   const [name, setName] = useState("");
   const [category, setCategory] = useState(mode === "outfit" ? "日常搭配" : "T恤");
@@ -636,13 +664,14 @@ function UploadModal({
       const userId = userData.user?.id;
       if (!userId) throw new Error("未登录");
 
-      // 先压缩并尝试白底处理；白底服务不可用时保留原图，不阻断录入。
+      // 在浏览器内压缩并尝试白底处理；失败时保留原图，不阻断录入。
       let processedImage: ProcessedImage | null = null;
       let ext = "webp";
       if (file) {
-        processedImage = await normalizeImage(file, cleanBackground);
+        processedImage = await normalizeImage(file, cleanBackground, setProcessingMessage);
         ext = processedImage.extension;
       }
+      setProcessingMessage("正在保存到你的衣橱…");
 
       const extra = {
         price,
@@ -737,6 +766,7 @@ function UploadModal({
       setError("暂时没有保存成功，请稍后再试");
     } finally {
       setSaving(false);
+      setProcessingMessage("");
     }
   }
 
@@ -744,7 +774,13 @@ function UploadModal({
     mode === "garment" ? "收进衣橱" : mode === "outfit" ? "记录今天的 OOTD" : "购前想一想";
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onMouseDown={() => {
+        if (!saving) onClose();
+      }}
+    >
       <section
         className="upload-modal"
         role="dialog"
@@ -759,7 +795,7 @@ function UploadModal({
             </p>
             <h2 id="upload-title">{title}</h2>
           </div>
-          <button className="close-button" onClick={onClose} aria-label="关闭">
+          <button className="close-button" onClick={onClose} aria-label="关闭" disabled={saving}>
             ×
           </button>
         </div>
@@ -769,6 +805,7 @@ function UploadModal({
             type="button"
             className={`photo-drop ${preview ? "with-preview" : ""}`}
             onClick={() => fileRef.current?.click()}
+            disabled={saving}
           >
             {preview ? (
               <img src={preview} alt="待上传预览" />
@@ -791,13 +828,14 @@ function UploadModal({
           {mode !== "outfit" && (
             <label className="clean-toggle">
               <span>
-                <strong>白底处理</strong>
-                <small>自动抠出衣服并铺纯白底（联网处理，需登录）</small>
+                <strong>本机白底处理</strong>
+                <small>照片不离开设备；首次使用需加载约 55MB 模型，之后会缓存</small>
               </span>
               <input
                 type="checkbox"
                 checked={cleanBackground}
                 onChange={(event) => setCleanBackground(event.target.checked)}
+                disabled={saving}
               />
               <i />
             </label>
@@ -909,8 +947,14 @@ function UploadModal({
           )}
 
           {error && <p className="form-error">{error}</p>}
+          {saving && processingMessage && (
+            <p className="local-processing-status" role="status" aria-live="polite">
+              <span />
+              {processingMessage}
+            </p>
+          )}
           <button className="primary-button wide" type="submit" disabled={saving}>
-            {saving ? "正在整理…" : mode === "wish" ? "生成购买建议" : "保存"}
+            {saving ? processingMessage || "正在整理…" : mode === "wish" ? "生成购买建议" : "保存"}
           </button>
         </form>
       </section>
@@ -949,7 +993,17 @@ function ProfileModal({
         <button className="primary-button wide" onClick={signOut} disabled={busy}>
           {busy ? "处理中…" : "退出登录"}
         </button>
-        <small>这是个人衣橱版本；开放给更多人之前，建议再升级照片的私有访问方式。</small>
+        <small>
+          这是个人衣橱版本；开放给更多人之前，建议再升级照片的私有访问方式。
+          {" "}
+          <a
+            href="https://github.com/liujichun1017-dotcom/wardrobe"
+            target="_blank"
+            rel="noreferrer"
+          >
+            查看源代码
+          </a>
+        </small>
       </section>
     </div>
   );

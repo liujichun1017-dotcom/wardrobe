@@ -9,8 +9,10 @@
     "lint": "eslint app lib --max-warnings=0"
   },
   "dependencies": {
+    "@imgly/background-removal": "^1.7.0",
     "@supabase/supabase-js": "^2.45.0",
-    "next": "16.2.6",
+    "next": "^16.2.12",
+    "onnxruntime-web": "^1.21.0",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },
@@ -20,7 +22,7 @@
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "eslint": "9.39.4",
-    "eslint-config-next": "16.2.6",
+    "eslint-config-next": "^16.2.12",
     "tailwindcss": "4.2.1",
     "typescript": "5.9.3"
   },
