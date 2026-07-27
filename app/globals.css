@@ -398,7 +398,7 @@ select:focus-visible {
 }
 
 .garment-visual.has-photo {
-  background: #f0eee8;
+  background: #fff;
 }
 
 .garment-visual img {
@@ -5000,5 +5000,183 @@ body::before {
   }
   .look-piece {
     width: 100px;
+  }
+}
+
+/* Reliability and destructive-action feedback. */
+.system-banner {
+  margin: 14px 0;
+  padding: 11px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 2px solid var(--ink);
+  background: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.system-banner.error {
+  border-color: #ed1c24;
+  color: #8e1d21;
+}
+
+.system-banner button {
+  padding: 6px 10px;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font-size: 9px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.app-notice {
+  position: fixed;
+  z-index: 180;
+  right: 24px;
+  bottom: 24px;
+  width: min(380px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border: 2px solid var(--ink);
+  background: #fff;
+  box-shadow: 7px 7px 0 #ed1c24;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.form-success {
+  margin: 10px 0;
+  color: #226b34;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.delete-entry-modal {
+  width: min(520px, 100%);
+}
+
+.delete-entry-actions {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.delete-entry-actions button {
+  min-height: 44px;
+  border: 2px solid var(--ink);
+  background: transparent;
+  font-size: 10px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.delete-entry-actions button:last-child {
+  border-color: #ed1c24;
+  background: #ed1c24;
+  color: white;
+}
+
+.archive-card-delete:focus-visible,
+.wish-delete-button:focus-visible {
+  outline: 3px solid #ed1c24;
+  outline-offset: 2px;
+}
+
+.look-worn-btn:disabled {
+  opacity: 1;
+}
+
+.look-suggestion-banner {
+  margin-bottom: 18px;
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border: 2px solid var(--ink);
+  border-left: 9px solid #ed1c24;
+  background: #fff;
+}
+
+.look-suggestion-banner .eyebrow {
+  margin: 0 0 6px;
+  color: #ed1c24;
+}
+
+.look-suggestion-banner strong,
+.look-suggestion-banner span {
+  display: block;
+}
+
+.look-suggestion-banner strong {
+  font-family: "Arial Black", "PingFang SC", sans-serif;
+  font-size: 17px;
+  line-height: 1.3;
+}
+
+.look-suggestion-banner span {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.look-suggestion-banner button {
+  flex: 0 0 auto;
+  padding: 10px 14px;
+  border: 2px solid var(--ink);
+  background: var(--ink);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.wish-list article {
+  position: relative;
+}
+
+.wish-list small {
+  display: block;
+  color: #8e1d21;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.wish-delete-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ink);
+  color: white;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+@media (max-width: 700px) {
+  .app-notice {
+    right: 16px;
+    bottom: 88px;
+  }
+
+  .system-banner {
+    align-items: flex-start;
+  }
+
+  .look-suggestion-banner {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

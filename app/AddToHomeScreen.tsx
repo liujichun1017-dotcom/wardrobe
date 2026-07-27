@@ -17,7 +17,9 @@ export default function AddToHomeScreen() {
     // 仅在 iOS Safari 引导（其他浏览器有自己的安装提示）
     const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
     const isSafari = /safari/i.test(navigator.userAgent) && !/crios|fxios/i.test(navigator.userAgent);
-    if (isIOS && isSafari) setShow(true);
+    if (!isIOS || !isSafari) return;
+    const timeout = window.setTimeout(() => setShow(true), 0);
+    return () => window.clearTimeout(timeout);
   }, []);
 
   function dismiss() {

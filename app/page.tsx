@@ -1,5 +1,8 @@
 "use client";
 
+/* User uploads and local blob previews intentionally use native img elements. */
+/* eslint-disable @next/next/no-img-element */
+
 import {
   ChangeEvent,
   FormEvent,
@@ -25,6 +28,7 @@ type Entry = {
   season: string;
   wornCount: number;
   lastWornAt: string | null;
+  imageKey: string | null;
   imageUrl: string | null;
   notes: string;
   extra: Record<string, string | number | boolean | string[]>;
@@ -62,6 +66,7 @@ function rowToEntry(row: EntryRow): Entry {
     season: row.season,
     wornCount: row.worn_count,
     lastWornAt: row.last_worn_at,
+    imageKey: row.image_key,
     imageUrl: row.image_key ? publicImageUrl(row.image_key) : null,
     notes: row.notes,
     extra,
@@ -79,6 +84,7 @@ const DEMO_ITEMS: Entry[] = [
     season: "春夏",
     wornCount: 12,
     lastWornAt: "2026-07-18",
+    imageKey: null,
     imageUrl: null,
     notes: "",
     extra: { shape: "shirt", tone: "#d8c6aa" },
@@ -94,6 +100,7 @@ const DEMO_ITEMS: Entry[] = [
     season: "四季",
     wornCount: 23,
     lastWornAt: "2026-07-21",
+    imageKey: null,
     imageUrl: null,
     notes: "",
     extra: { shape: "tee", tone: "#f4f0e8" },
@@ -109,6 +116,7 @@ const DEMO_ITEMS: Entry[] = [
     season: "春秋",
     wornCount: 8,
     lastWornAt: "2026-06-03",
+    imageKey: null,
     imageUrl: null,
     notes: "",
     extra: { shape: "pants", tone: "#8097a6" },
@@ -124,6 +132,7 @@ const DEMO_ITEMS: Entry[] = [
     season: "四季",
     wornCount: 31,
     lastWornAt: "2026-07-20",
+    imageKey: null,
     imageUrl: null,
     notes: "",
     extra: { shape: "bag", tone: "#34322f" },
@@ -139,6 +148,7 @@ const DEMO_ITEMS: Entry[] = [
     season: "夏季",
     wornCount: 3,
     lastWornAt: "2026-05-08",
+    imageKey: null,
     imageUrl: null,
     notes: "",
     extra: { shape: "swim", tone: "#254a5f" },
@@ -154,6 +164,7 @@ const DEMO_ITEMS: Entry[] = [
     season: "夏季",
     wornCount: 3,
     lastWornAt: "2026-05-08",
+    imageKey: null,
     imageUrl: null,
     notes: "",
     extra: { shape: "cap", tone: "#e5c958" },
@@ -172,6 +183,7 @@ const DEMO_OUTFITS: Entry[] = [
     season: "四季",
     wornCount: 1,
     lastWornAt: "2026-07-19",
+    imageKey: null,
     imageUrl: null,
     notes: "",
     extra: { demoOffset: 0 },
@@ -187,6 +199,7 @@ const DEMO_OUTFITS: Entry[] = [
     season: "春夏",
     wornCount: 1,
     lastWornAt: "2026-06-28",
+    imageKey: null,
     imageUrl: null,
     notes: "",
     extra: { demoOffset: 1 },
@@ -202,6 +215,7 @@ const DEMO_OUTFITS: Entry[] = [
     season: "夏季",
     wornCount: 1,
     lastWornAt: "2026-05-08",
+    imageKey: null,
     imageUrl: null,
     notes: "",
     extra: { demoOffset: 4 },
@@ -221,6 +235,11 @@ const CATEGORY_OPTIONS = [
   "鞋履",
   "包袋",
   "配饰",
+  "帽子",
+  "围巾",
+  "腰带",
+  "首饰",
+  "内衣 / 家居",
   "泳装",
   "泳帽",
   "其他",
@@ -232,6 +251,72 @@ const REMOVAL_REASONS = [
   { id: "donated", label: "已捐赠", note: "记录去向，不再参与搭配与数量统计" },
   { id: "retired", label: "其他原因", note: "损坏、淘汰或暂时不再拥有" },
 ];
+
+type GarmentRole = "top" | "bottom" | "layer" | "onepiece" | "shoe" | "accessory" | "swim" | "other";
+
+const LOOK_SUGGESTION_NAMES = ["黑白层次", "体积错位", "克制留白"];
+
+function garmentRole(category: string): GarmentRole {
+  if (["T恤", "衬衫", "针织"].includes(category)) return "top";
+  if (["长裤", "短裤"].includes(category)) return "bottom";
+  if (category === "外套") return "layer";
+  if (category === "裙装") return "onepiece";
+  if (category === "鞋履") return "shoe";
+  if (["包袋", "配饰", "帽子", "围巾", "腰带", "首饰"].includes(category)) return "accessory";
+  if (["泳装", "泳帽"].includes(category)) return "swim";
+  return "other";
+}
+
+function buildLookSuggestions(seed: Entry, wardrobe: Entry[]): Entry[][] {
+  const active = wardrobe.filter(
+    (item, index, list) =>
+      item.kind === "garment" &&
+      item.extra.status !== "removed" &&
+      list.findIndex((candidate) => candidate.id === item.id) === index,
+  );
+  const seedRole = garmentRole(seed.category);
+  const templates: Record<GarmentRole, GarmentRole[]> = {
+    top: ["layer", "top", "bottom", "shoe", "accessory"],
+    bottom: ["layer", "top", "bottom", "shoe", "accessory"],
+    layer: ["layer", "top", "bottom", "shoe", "accessory"],
+    onepiece: ["layer", "onepiece", "shoe", "accessory"],
+    shoe: ["layer", "top", "bottom", "shoe", "accessory"],
+    accessory: ["layer", "top", "bottom", "shoe", "accessory"],
+    swim: ["swim", "accessory", "shoe"],
+    other: ["layer", "top", "bottom", "other", "shoe", "accessory"],
+  };
+
+  const suggestions: Entry[][] = [];
+  for (let variant = 0; variant < 3; variant += 1) {
+    const used = new Set<string>();
+    const suggestion: Entry[] = [];
+    for (const role of templates[seedRole]) {
+      let chosen: Entry | undefined;
+      if (role === seedRole && !used.has(seed.id)) {
+        chosen = seed;
+      } else {
+        const candidates = active
+          .filter((item) => !used.has(item.id) && garmentRole(item.category) === role)
+          .sort((a, b) => {
+            const seasonA = a.season === seed.season || a.season === "四季" ? 1 : 0;
+            const seasonB = b.season === seed.season || b.season === "四季" ? 1 : 0;
+            return seasonB - seasonA || a.wornCount - b.wornCount || a.name.localeCompare(b.name, "zh-CN");
+          });
+        chosen = candidates.length ? candidates[variant % candidates.length] : undefined;
+      }
+      if (chosen) {
+        used.add(chosen.id);
+        suggestion.push(chosen);
+      }
+    }
+    if (!used.has(seed.id)) suggestion.unshift(seed);
+    const key = suggestion.map((item) => item.id).join("|");
+    if (suggestion.length && !suggestions.some((look) => look.map((item) => item.id).join("|") === key)) {
+      suggestions.push(suggestion);
+    }
+  }
+  return suggestions;
+}
 
 function removalReasonLabel(reason: unknown) {
   return REMOVAL_REASONS.find((item) => item.id === reason)?.label || "已出库";
@@ -249,6 +334,15 @@ function daysSince(date: string | null) {
   if (!date) return 999;
   const diff = Date.now() - new Date(`${date}T12:00:00`).getTime();
   return Math.max(0, Math.floor(diff / 86_400_000));
+}
+
+function localDateKey(date = new Date()) {
+  const localTime = date.getTime() - date.getTimezoneOffset() * 60_000;
+  return new Date(localTime).toISOString().slice(0, 10);
+}
+
+function unwornLabel(date: string | null) {
+  return date ? `${daysSince(date)} 天未穿` : "从未穿过";
 }
 
 function GarmentVisual({
@@ -415,7 +509,8 @@ function LookPicker({
   );
 }
 
-function normalizeImage(file: File, removeBackground: boolean): Promise<Blob> {
+// 缩放到最长边 1400，输出 webp（不抠背景时用）
+function scaleToBlob(file: File): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const image = new Image();
     const src = URL.createObjectURL(file);
@@ -427,51 +522,20 @@ function normalizeImage(file: File, removeBackground: boolean): Promise<Blob> {
       const canvas = document.createElement("canvas");
       canvas.width = width;
       canvas.height = height;
-      const context = canvas.getContext("2d", { willReadFrequently: removeBackground });
+      const context = canvas.getContext("2d");
       if (!context) {
+        URL.revokeObjectURL(src);
         reject(new Error("无法读取图片"));
         return;
       }
       context.drawImage(image, 0, 0, width, height);
-
-      if (removeBackground) {
-        const pixels = context.getImageData(0, 0, width, height);
-        const data = pixels.data;
-        const samplePoints = [
-          0,
-          (width - 1) * 4,
-          (height - 1) * width * 4,
-          ((height - 1) * width + width - 1) * 4,
-        ];
-        const bg = samplePoints.reduce(
-          (sum, index) => {
-            sum[0] += data[index];
-            sum[1] += data[index + 1];
-            sum[2] += data[index + 2];
-            return sum;
-          },
-          [0, 0, 0],
-        ).map((value) => value / samplePoints.length);
-
-        for (let index = 0; index < data.length; index += 4) {
-          const distance = Math.sqrt(
-            (data[index] - bg[0]) ** 2 +
-              (data[index + 1] - bg[1]) ** 2 +
-              (data[index + 2] - bg[2]) ** 2,
-          );
-          if (distance < 28) data[index + 3] = 0;
-          else if (distance < 64) data[index + 3] = Math.round(((distance - 28) / 36) * 255);
-        }
-        context.putImageData(pixels, 0, 0);
-      }
-
+      URL.revokeObjectURL(src);
       canvas.toBlob(
         (blob) => {
-          URL.revokeObjectURL(src);
           if (blob) resolve(blob);
           else reject(new Error("图片处理失败"));
         },
-        removeBackground ? "image/png" : "image/webp",
+        "image/webp",
         0.9,
       );
     };
@@ -483,6 +547,88 @@ function normalizeImage(file: File, removeBackground: boolean): Promise<Blob> {
   });
 }
 
+// 调服务端代理 /api/remove-bg 拿透明 PNG（API key 只在服务端持有）
+async function removeBackgroundViaApi(image: Blob): Promise<Blob> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new Error("bg-failed");
+  const fd = new FormData();
+  fd.append("image", image);
+  const res = await fetch("/api/remove-bg", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: fd,
+  });
+  if (!res.ok) throw new Error("bg-failed");
+  return await res.blob();
+}
+
+// 把透明 PNG 合成到纯白底，输出 jpg
+function compositeOnWhite(transparent: Blob): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const src = URL.createObjectURL(transparent);
+    const image = new Image();
+    image.onload = () => {
+      const maxSide = 1400;
+      const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+      const width = Math.max(1, Math.round(image.width * scale));
+      const height = Math.max(1, Math.round(image.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        URL.revokeObjectURL(src);
+        reject(new Error("图片处理失败"));
+        return;
+      }
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, width, height);
+      context.drawImage(image, 0, 0, width, height);
+      URL.revokeObjectURL(src);
+      canvas.toBlob(
+        (blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error("图片处理失败"));
+        },
+        "image/jpeg",
+        0.92,
+      );
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(src);
+      reject(new Error("图片处理失败"));
+    };
+    image.src = src;
+  });
+}
+
+type ProcessedImage = {
+  blob: Blob;
+  cleaned: boolean;
+  extension: "jpg" | "webp";
+  notice?: string;
+};
+
+async function normalizeImage(file: File, removeBackground: boolean): Promise<ProcessedImage> {
+  const scaled = await scaleToBlob(file);
+  if (!removeBackground) {
+    return { blob: scaled, cleaned: false, extension: "webp" };
+  }
+  try {
+    const transparent = await removeBackgroundViaApi(scaled);
+    const whiteBackground = await compositeOnWhite(transparent);
+    return { blob: whiteBackground, cleaned: true, extension: "jpg" };
+  } catch {
+    return {
+      blob: scaled,
+      cleaned: false,
+      extension: "webp",
+      notice: "衣物已保存，但白底服务暂时不可用，所以保留了原图。",
+    };
+  }
+}
+
 function UploadModal({
   mode,
   items,
@@ -492,7 +638,7 @@ function UploadModal({
   mode: EntryKind;
   items: Entry[];
   onClose: () => void;
-  onSaved: (entry: Entry) => void;
+  onSaved: (entry: Entry, notice?: string) => void;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
@@ -526,7 +672,18 @@ function UploadModal({
   function pickFile(event: ChangeEvent<HTMLInputElement>) {
     const next = event.target.files?.[0];
     if (!next) return;
+    if (!next.type.startsWith("image/")) {
+      setError("请选择图片文件");
+      event.target.value = "";
+      return;
+    }
+    if (next.size > 25 * 1024 * 1024) {
+      setError("图片请控制在 25MB 以内");
+      event.target.value = "";
+      return;
+    }
     if (preview) URL.revokeObjectURL(preview);
+    setError("");
     setFile(next);
     setPreview(URL.createObjectURL(next));
   }
@@ -544,9 +701,18 @@ function UploadModal({
       const userId = userData.user?.id;
       if (!userId) throw new Error("未登录");
 
+      // 先压缩并尝试白底处理；白底服务不可用时保留原图，不阻断录入。
+      let processedImage: ProcessedImage | null = null;
+      let ext = "webp";
+      if (file) {
+        processedImage = await normalizeImage(file, cleanBackground);
+        ext = processedImage.extension;
+      }
+
       const extra = {
         price,
-        cleaned: cleanBackground,
+        cleaned: processedImage?.cleaned ?? false,
+        outfitType: mode === "outfit" ? "ootd" : "",
         recommendation:
           mode === "wish"
             ? similar.length >= 3
@@ -557,7 +723,6 @@ function UploadModal({
             : "",
       };
 
-      const createdAt = new Date().toISOString();
       const { data: inserted, error: insertError } = await supabase
         .from("entries")
         .insert({
@@ -569,32 +734,36 @@ function UploadModal({
           season,
           notes: "",
           extra,
-          last_worn_at: mode === "outfit" ? createdAt.slice(0, 10) : null,
+          last_worn_at: mode === "outfit" ? localDateKey() : null,
         })
         .select()
         .single();
       if (insertError || !inserted) throw new Error("保存失败");
 
-      let imageKey: string | null = null;
-      if (file) {
-        const blob = await normalizeImage(file, cleanBackground);
-        const ext = cleanBackground ? "png" : "webp";
-        imageKey = `${userId}/${inserted.id}.${ext}`;
+      if (processedImage) {
+        const imageKey = `${userId}/${inserted.id}.${ext}`;
         const { error: upErr } = await supabase.storage
           .from(STORAGE_BUCKET)
-          .upload(imageKey, blob, {
-            contentType: blob.type,
+          .upload(imageKey, processedImage.blob, {
+            contentType: processedImage.blob.type,
             upsert: true,
           });
-        if (upErr) throw new Error("图片上传失败");
+        if (upErr) {
+          await supabase.from("entries").delete().eq("id", inserted.id);
+          throw new Error("图片上传失败");
+        }
         const { data: updated, error: updErr } = await supabase
           .from("entries")
           .update({ image_key: imageKey })
           .eq("id", inserted.id)
           .select()
           .single();
-        if (updErr || !updated) throw new Error("保存失败");
-        onSaved(rowToEntry(updated));
+        if (updErr || !updated) {
+          await supabase.storage.from(STORAGE_BUCKET).remove([imageKey]);
+          await supabase.from("entries").delete().eq("id", inserted.id);
+          throw new Error("保存失败");
+        }
+        onSaved(rowToEntry(updated), processedImage.notice);
       } else {
         onSaved(rowToEntry(inserted));
       }
@@ -656,8 +825,8 @@ function UploadModal({
           {mode !== "outfit" && (
             <label className="clean-toggle">
               <span>
-                <strong>清晰背景处理</strong>
-                <small>自动去除接近四角颜色的纯色背景</small>
+                <strong>白底处理</strong>
+                <small>自动抠出衣服并铺纯白底（联网处理，需登录）</small>
               </span>
               <input
                 type="checkbox"
@@ -750,11 +919,9 @@ function UploadModal({
 
 function ProfileModal({
   displayName,
-  onSignOut,
   onClose,
 }: {
   displayName: string;
-  onSignOut: () => void;
   onClose: () => void;
 }) {
   const [busy, setBusy] = useState(false);
@@ -777,11 +944,11 @@ function ProfileModal({
         <div className="profile-orbit">{displayName.slice(0, 1) || "衣"}</div>
         <p className="eyebrow">SIGNED IN</p>
         <h2>你好，{displayName}</h2>
-        <p>你的衣物和照片只属于你这个账号，不会出现在别人眼里。换设备登录后继续同步。</p>
+        <p>你的衣物清单按账号隔离保存，换设备登录后可以继续同步。</p>
         <button className="primary-button wide" onClick={signOut} disabled={busy}>
           {busy ? "处理中…" : "退出登录"}
         </button>
-        <small>数据按账号隔离，安全保存在你的私人空间。</small>
+        <small>这是个人衣橱版本；开放给更多人之前，建议再升级照片的私有访问方式。</small>
       </section>
     </div>
   );
@@ -832,15 +999,11 @@ function RemoveGarmentModal({
     setBusy(true);
     setError("");
     try {
-      if (item.imageUrl && item.id) {
-        // 图片 key 形如 userId/id.ext，无法直接还原，尝试按前缀删（容错）。
-        const { data: list } = await supabase.storage
+      if (item.imageKey) {
+        const { error: storageError } = await supabase.storage
           .from(STORAGE_BUCKET)
-          .list();
-        const mine = (list || []).filter((o) => o.name.includes(item.id));
-        if (mine.length) {
-          await supabase.storage.from(STORAGE_BUCKET).remove(mine.map((o) => o.name));
-        }
+          .remove([item.imageKey]);
+        if (storageError) throw new Error("Unable to delete image");
       }
       const { error } = await supabase.from("entries").delete().eq("id", item.id);
       if (error) throw new Error("Unable to delete garment");
@@ -849,6 +1012,50 @@ function RemoveGarmentModal({
       setError("暂时没有删除成功，请稍后再试");
       setBusy(false);
     }
+  }
+
+  if (item.kind !== "garment") {
+    const label = item.kind === "outfit"
+      ? item.extra.outfitType === "look"
+        ? "造型方案"
+        : "OOTD 记录"
+      : "购前清单";
+    return (
+      <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+        <section
+          className="remove-modal delete-entry-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-entry-title"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <div className="modal-head">
+            <div>
+              <p className="eyebrow">DELETE FROM ARCHIVE</p>
+              <h2 id="delete-entry-title">删除{label}</h2>
+            </div>
+            <button className="close-button" onClick={onClose} aria-label="关闭">
+              ×
+            </button>
+          </div>
+          <div className="remove-garment-preview">
+            <GarmentVisual item={item} />
+            <div>
+              <span>{label} / {item.category}</span>
+              <strong>{item.name}</strong>
+              <small>这会同时删除照片和资料，删除后无法恢复。</small>
+            </div>
+          </div>
+          {error && <p className="form-error">{error}</p>}
+          <div className="delete-entry-actions">
+            <button onClick={onClose}>先保留</button>
+            <button onClick={permanentlyDelete} disabled={busy}>
+              {busy ? "正在删除…" : "确认删除"}
+            </button>
+          </div>
+        </section>
+      </div>
+    );
   }
 
   return (
@@ -932,9 +1139,10 @@ function Home({ displayName }: { displayName: string }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("全部");
   const [archiveView, setArchiveView] = useState<ArchiveView>("outfits");
-  const [archiveScene, setArchiveScene] = useState("全部");
   const [archiveCategory, setArchiveCategory] = useState("全部");
   const [removeTarget, setRemoveTarget] = useState<Entry | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [notice, setNotice] = useState("");
   const [query, setQuery] = useState("");
   const [lookDraft, setLookDraft] = useState<Entry[]>([]);
   const [lookName, setLookName] = useState("");
@@ -944,18 +1152,34 @@ function Home({ displayName }: { displayName: string }) {
   const [lookSaving, setLookSaving] = useState(false);
   const [lookError, setLookError] = useState("");
   const [lookSaved, setLookSaved] = useState(false);
+  const [lookSuggestionSeed, setLookSuggestionSeed] = useState<Entry | null>(null);
+  const [lookSuggestions, setLookSuggestions] = useState<Entry[][]>([]);
+  const [lookSuggestionIndex, setLookSuggestionIndex] = useState(0);
   const [archiveOutfitView, setArchiveOutfitView] = useState<"looks" | "ootd">("looks");
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase
-        .from("entries")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(500);
+      const pageSize = 500;
+      const rows: EntryRow[] = [];
+      let error: Error | null = null;
+      for (let from = 0; from < 10_000; from += pageSize) {
+        const result = await supabase
+          .from("entries")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .range(from, from + pageSize - 1);
+        if (result.error) {
+          error = result.error;
+          break;
+        }
+        const page = (result.data || []) as EntryRow[];
+        rows.push(...page);
+        if (page.length < pageSize) break;
+      }
       if (cancelled) return;
-      if (!error && data) setEntries(data.map(rowToEntry));
+      if (!error) setEntries(rows.map(rowToEntry));
+      setLoadError(Boolean(error));
       if (!cancelled) setLoaded(true);
     })();
     return () => {
@@ -963,12 +1187,19 @@ function Home({ displayName }: { displayName: string }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(""), 3600);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
   const allGarments = entries.filter((entry) => entry.kind === "garment");
   const garments = allGarments.filter((entry) => entry.extra.status !== "removed");
   const removedGarments = allGarments.filter((entry) => entry.extra.status === "removed");
-  const visibleGarments = garments.length ? garments : DEMO_ITEMS;
+  const isDemoCloset = loaded && allGarments.length === 0;
+  const visibleGarments = isDemoCloset ? DEMO_ITEMS : garments;
   const outfits = entries.filter((entry) => entry.kind === "outfit");
-  const visibleOutfits = outfits.length ? outfits : DEMO_OUTFITS;
+  const visibleOutfits = loaded && outfits.length === 0 ? DEMO_OUTFITS : outfits;
   // 造型方案 vs OOTD 照片分开
   const savedLooks = outfits.filter((o) => o.extra.outfitType === "look");
   const ootdPhotos = outfits.filter((o) => o.extra.outfitType !== "look");
@@ -984,11 +1215,8 @@ function Home({ displayName }: { displayName: string }) {
       (categoryFilter === "全部" || item.category === categoryFilter) &&
       (!query || `${item.name}${item.category}${item.color}`.toLowerCase().includes(query.toLowerCase())),
   );
-  const archiveScenes = ["全部", ...Array.from(new Set(visibleOutfits.map((item) => item.category)))];
-  const archiveOutfits = visibleOutfits.filter(
-    (outfit) => archiveScene === "全部" || outfit.category === archiveScene,
-  );
   const archiveSourceGarments = allGarments.length ? allGarments : DEMO_ITEMS;
+  const lookGarmentSource = allGarments.length ? allGarments : DEMO_ITEMS;
   const archiveCategories = [
     "全部",
     ...Array.from(new Set(archiveSourceGarments.map((item) => item.category))),
@@ -1000,37 +1228,67 @@ function Home({ displayName }: { displayName: string }) {
     return garment.category === archiveCategory;
   });
 
-  function addEntry(entry: Entry) {
+  function addEntry(entry: Entry, message?: string) {
     setEntries((current) => [entry, ...current]);
     setUploadMode(null);
+    if (entry.kind === "garment") {
+      const suggestions = buildLookSuggestions(entry, [entry, ...garments]);
+      const firstSuggestion = suggestions[0] || [entry];
+      setLookSuggestionSeed(entry);
+      setLookSuggestions(suggestions.length ? suggestions : [[entry]]);
+      setLookSuggestionIndex(0);
+      setLookDraft(firstSuggestion);
+      setLookName(`${entry.name} / ${LOOK_SUGGESTION_NAMES[0]}`);
+      setLookScene("日常搭配");
+      setLookError("");
+      setActiveTab("looks");
+      setNotice(message || "衣物已保存，并为它生成了一套搭配建议。");
+      return;
+    }
+    setNotice(message || "已保存到你的衣橱档案。");
   }
 
   function updateEntry(entry: Entry) {
     setEntries((current) => current.map((item) => (item.id === entry.id ? entry : item)));
     setRemoveTarget(null);
+    setNotice("已完成出库，过往记录仍保留在档案馆。");
   }
 
   function deleteEntry(id: string) {
+    const deleted = entries.find((item) => item.id === id);
     setEntries((current) => current.filter((item) => item.id !== id));
     setRemoveTarget(null);
+    setNotice(
+      deleted?.kind === "garment"
+        ? "衣物和照片已彻底删除。"
+        : deleted?.kind === "wish"
+          ? "已从购前清单删除。"
+          : "造型记录已删除。",
+    );
   }
 
   async function restoreEntry(entry: Entry) {
-    const existing = entry.extra || {};
-    const { status: _status, removalReason: _r, removedAt: _t, ...rest } = existing as Record<string, unknown>;
+    const rest = { ...(entry.extra || {}) } as Record<string, unknown>;
+    delete rest.status;
+    delete rest.removalReason;
+    delete rest.removedAt;
     const { data, error } = await supabase
       .from("entries")
       .update({ extra: rest })
       .eq("id", entry.id)
       .select()
       .single();
-    if (error) return;
+    if (error) {
+      setNotice("重新入库失败，请稍后再试。");
+      return;
+    }
     const restored = rowToEntry(data);
     setEntries((current) => current.map((item) => (item.id === restored.id ? restored : item)));
+    setNotice("已经重新放回衣橱。");
   }
 
   async function recordWorn(entry: Entry) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateKey();
     if (entry.lastWornAt === today) return;
     const { data, error } = await supabase
       .from("entries")
@@ -1038,14 +1296,18 @@ function Home({ displayName }: { displayName: string }) {
       .eq("id", entry.id)
       .select()
       .single();
-    if (error) return;
+    if (error) {
+      setNotice("穿着记录没有保存成功，请稍后再试。");
+      return;
+    }
     const updated = rowToEntry(data);
     setEntries((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+    setNotice(`已记录今天穿了「${entry.name}」。`);
   }
 
   // 造型方案"标记今天穿了"：给关联的所有衣物 +1 穿着计数，造型本身标记穿过日期
   async function markLookWorn(outfit: Entry) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateKey();
     if (outfit.lastWornAt === today) return;
     // 找到关联的衣物（含 demo）
     const garmentIds = Array.isArray(outfit.extra.garmentIds)
@@ -1054,8 +1316,9 @@ function Home({ displayName }: { displayName: string }) {
     const allSource = [...allGarments, ...DEMO_ITEMS];
     const linkedGarments = garmentIds
       .map((id) => allSource.find((g) => g.id === id))
-      .filter((g): g is Entry => Boolean(g) && g.lastWornAt !== today);
+      .filter((g): g is Entry => g != null && g.lastWornAt !== today);
     // 逐件 +1（真实衣物写 DB，demo 衣物只更新前端 state）
+    let failed = false;
     for (const g of linkedGarments) {
       const isDemo = g.id.startsWith("demo-");
       if (isDemo) {
@@ -1068,12 +1331,13 @@ function Home({ displayName }: { displayName: string }) {
           ),
         );
       } else {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from("entries")
           .update({ worn_count: (g.wornCount || 0) + 1, last_worn_at: today })
           .eq("id", g.id)
           .select()
           .single();
+        if (error) failed = true;
         if (data) {
           const updated = rowToEntry(data);
           setEntries((current) => current.map((item) => (item.id === updated.id ? updated : item)));
@@ -1081,7 +1345,7 @@ function Home({ displayName }: { displayName: string }) {
       }
     }
     // 造型本身标记穿过
-    const { data: outfitData } = await supabase
+    const { data: outfitData, error: outfitError } = await supabase
       .from("entries")
       .update({ last_worn_at: today })
       .eq("id", outfit.id)
@@ -1091,26 +1355,12 @@ function Home({ displayName }: { displayName: string }) {
       const updated = rowToEntry(outfitData);
       setEntries((current) => current.map((item) => (item.id === updated.id ? updated : item)));
     }
+    setNotice(
+      failed || outfitError
+        ? "部分穿着记录没有同步成功，请稍后再试。"
+        : `已记录今天穿了「${outfit.name}」。`,
+    );
   }
-
-  // 造型页：预填几件衣物（按品类各抽一件）
-  function prefillLookDraft() {
-    const source = garments.length ? garments : visibleGarments;
-    const byCategory = new Map<string, Entry>();
-    for (const item of source) {
-      if (item.extra.status === "removed") continue;
-      if (!byCategory.has(item.category)) byCategory.set(item.category, item);
-    }
-    setLookDraft(Array.from(byCategory.values()).slice(0, 5));
-  }
-
-  // 切到造型页时自动预填（仅当画布为空）
-  useEffect(() => {
-    if (activeTab === "looks" && lookDraft.length === 0) {
-      prefillLookDraft();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
 
   // 造型页：切换衣物选中
   function toggleLookItem(item: Entry) {
@@ -1121,14 +1371,33 @@ function Home({ displayName }: { displayName: string }) {
     });
   }
 
+  function showNextLookSuggestion() {
+    if (!lookSuggestionSeed || lookSuggestions.length < 2) return;
+    const nextIndex = (lookSuggestionIndex + 1) % lookSuggestions.length;
+    setLookSuggestionIndex(nextIndex);
+    setLookDraft(lookSuggestions[nextIndex]);
+    setLookName(
+      `${lookSuggestionSeed.name} / ${LOOK_SUGGESTION_NAMES[nextIndex % LOOK_SUGGESTION_NAMES.length]}`,
+    );
+    setLookError("");
+  }
+
   // 造型页：保存
   async function saveLook() {
     if (!lookName.trim()) {
       setLookError("先给这套搭配起个名字吧");
       return;
     }
-    if (lookDraft.length === 0) {
+    const validDraft = lookDraft.filter((draft) =>
+      garments.some((garment) => garment.id === draft.id),
+    );
+    if (validDraft.length === 0) {
       setLookError("至少选一件衣物");
+      return;
+    }
+    if (validDraft.length !== lookDraft.length) {
+      setLookDraft(validDraft);
+      setLookError("有单品已经出库，请确认当前搭配后再保存");
       return;
     }
     setLookSaving(true);
@@ -1148,7 +1417,7 @@ function Home({ displayName }: { displayName: string }) {
           season: "四季",
           notes: "",
           extra: {
-            garmentIds: lookDraft.map((g) => g.id),
+            garmentIds: validDraft.map((g) => g.id),
             outfitType: "look",
             price: "",
             cleaned: false,
@@ -1163,6 +1432,9 @@ function Home({ displayName }: { displayName: string }) {
       setLookDraft([]);
       setLookName("");
       setLookScene("日常搭配");
+      setLookSuggestionSeed(null);
+      setLookSuggestions([]);
+      setLookSuggestionIndex(0);
       setLookSaved(true);
       setTimeout(() => setLookSaved(false), 3000);
     } catch {
@@ -1191,6 +1463,13 @@ function Home({ displayName }: { displayName: string }) {
       </header>
 
       <div className="page-wrap">
+        {!loaded && <div className="system-banner">正在同步你的衣橱…</div>}
+        {loadError && (
+          <div className="system-banner error" role="alert">
+            衣橱同步失败，当前内容可能不完整。
+            <button onClick={() => window.location.reload()}>重新加载</button>
+          </div>
+        )}
         {activeTab === "today" && (
           <section className="today-page">
             <div className="hero-copy">
@@ -1199,7 +1478,7 @@ function Home({ displayName }: { displayName: string }) {
                 今天，穿得
                 <em>不那么正确。</em>
               </h1>
-              {!garments.length && loaded && (
+              {isDemoCloset && (
                 <button className="demo-badge" onClick={() => setUploadMode("garment")}>
                   现在展示的是示例衣橱 · 添加我的第一件
                 </button>
@@ -1208,7 +1487,7 @@ function Home({ displayName }: { displayName: string }) {
 
             <div className="summary-strip">
               <div>
-                <strong>{garments.length || DEMO_ITEMS.length}</strong>
+                <strong>{visibleGarments.length}</strong>
                 <span>件衣物</span>
               </div>
               <i />
@@ -1219,7 +1498,7 @@ function Home({ displayName }: { displayName: string }) {
               <i />
               <div>
                 <strong>{outfits.length}</strong>
-                <span>套 OOTD</span>
+                <span>条造型档案</span>
               </div>
             </div>
 
@@ -1258,7 +1537,7 @@ function Home({ displayName }: { displayName: string }) {
                     {longUnworn.slice(0, 3).map((item) => (
                       <div key={item.id}>
                         <GarmentVisual item={item} />
-                        <span>{daysSince(item.lastWornAt)} 天</span>
+                        <span>{unwornLabel(item.lastWornAt)}</span>
                       </div>
                     ))}
                   </div>
@@ -1302,7 +1581,7 @@ function Home({ displayName }: { displayName: string }) {
                       setActiveTab("ootd");
                     }}
                   >
-                    <OutfitArchiveVisual outfit={outfit} garments={visibleGarments} />
+                    <OutfitArchiveVisual outfit={outfit} garments={lookGarmentSource} />
                     <span>LOOK / {String(index + 1).padStart(2, "0")}</span>
                     <strong>{outfit.name}</strong>
                   </button>
@@ -1339,7 +1618,7 @@ function Home({ displayName }: { displayName: string }) {
               <div>
                 <p className="eyebrow">GARMENT ARCHIVE / ALL</p>
                 <h1>衣物档案</h1>
-                <p>{garments.length || DEMO_ITEMS.length} 件单品，清清楚楚。</p>
+                <p>{visibleGarments.length} 件单品，清清楚楚。</p>
               </div>
               <button className="primary-button" onClick={() => setUploadMode("garment")}>
                 ＋ 添加衣物
@@ -1366,7 +1645,7 @@ function Home({ displayName }: { displayName: string }) {
                 ))}
               </div>
             </div>
-            {!garments.length && loaded && (
+            {isDemoCloset && (
               <div className="sample-notice">这是示例衣橱。添加第一件后，就会切换成你的真实衣橱。</div>
             )}
             <div className="closet-grid">
@@ -1376,7 +1655,7 @@ function Home({ displayName }: { displayName: string }) {
                     <GarmentVisual item={item} />
                     {item.isDemo && <span className="sample-chip">示例</span>}
                     {daysSince(item.lastWornAt) >= 30 && (
-                      <span className="idle-chip">{daysSince(item.lastWornAt)} 天未穿</span>
+                      <span className="idle-chip">{unwornLabel(item.lastWornAt)}</span>
                     )}
                   </div>
                   <div className="closet-meta">
@@ -1390,9 +1669,9 @@ function Home({ displayName }: { displayName: string }) {
                         <button
                           className="garment-worn-button"
                           onClick={() => recordWorn(item)}
-                          disabled={item.lastWornAt === new Date().toISOString().slice(0, 10)}
+                          disabled={item.lastWornAt === localDateKey()}
                         >
-                          {item.lastWornAt === new Date().toISOString().slice(0, 10) ? "今天已记" : "今天穿了"}
+                          {item.lastWornAt === localDateKey() ? "今天已记" : "今天穿了"}
                         </button>
                         <button className="garment-departure-button" onClick={() => setRemoveTarget(item)}>
                           出库 / 已售
@@ -1415,6 +1694,23 @@ function Home({ displayName }: { displayName: string }) {
                 <p>从衣橱选单品，拼一套搭配，保存起来。</p>
               </div>
             </div>
+
+            {lookSuggestionSeed && (
+              <div className="look-suggestion-banner" role="status">
+                <div>
+                  <p className="eyebrow">NEW GARMENT / LOOK SUGGESTION</p>
+                  <strong>围绕「{lookSuggestionSeed.name}」拼好了搭配草案</strong>
+                  <span>
+                    使用的都是你真实录入、仍在衣橱里的单品。可以继续增删，再保存为造型方案。
+                  </span>
+                </div>
+                {lookSuggestions.length > 1 && (
+                  <button onClick={showNextLookSuggestion}>
+                    换一套 · {lookSuggestionIndex + 1}/{lookSuggestions.length}
+                  </button>
+                )}
+              </div>
+            )}
 
             <div className="look-builder">
               <label className="field">
@@ -1439,7 +1735,11 @@ function Home({ displayName }: { displayName: string }) {
 
             <div className="look-canvas-new">
               {lookDraft.length === 0 ? (
-                <div className="look-empty">点下方按钮，从衣橱添加单品</div>
+                <div className="look-empty">
+                  {garments.length
+                    ? "点下方按钮，从衣橱添加单品"
+                    : "先录入自己的衣物，再开始搭配。示例衣物不会被保存进你的造型。"}
+                </div>
               ) : (
                 <div className="look-pieces">
                   {lookDraft.map((item) => (
@@ -1460,8 +1760,11 @@ function Home({ displayName }: { displayName: string }) {
             </div>
 
             <div className="look-actions">
-              <button className="look-add-btn" onClick={() => setLookPickerOpen(true)}>
-                <span>＋</span> 添加单品
+              <button
+                className="look-add-btn"
+                onClick={() => garments.length ? setLookPickerOpen(true) : setUploadMode("garment")}
+              >
+                <span>＋</span> {garments.length ? "添加单品" : "先添加衣物"}
               </button>
               <button
                 className="primary-button"
@@ -1478,7 +1781,7 @@ function Home({ displayName }: { displayName: string }) {
 
             {lookPickerOpen && (
               <LookPicker
-                garments={garments.length ? garments : visibleGarments}
+                garments={garments}
                 selectedIds={lookDraft.map((g) => g.id)}
                 onToggle={toggleLookItem}
                 onClose={() => setLookPickerOpen(false)}
@@ -1521,7 +1824,7 @@ function Home({ displayName }: { displayName: string }) {
               >
                 <span>02</span>
                 衣物陈列
-                <strong>{garments.length || DEMO_ITEMS.length}</strong>
+                <strong>{archiveSourceGarments.length}</strong>
               </button>
             </div>
 
@@ -1560,7 +1863,7 @@ function Home({ displayName }: { displayName: string }) {
                           <button
                             className="archive-card-delete"
                             onClick={() => setRemoveTarget(outfit)}
-                            aria-label="删除"
+                            aria-label={`删除造型方案：${outfit.name}`}
                           >
                             ×
                           </button>
@@ -1568,7 +1871,7 @@ function Home({ displayName }: { displayName: string }) {
                             <span>LOOK</span>
                             <strong>{String(index + 1).padStart(2, "0")}</strong>
                           </div>
-                          <OutfitArchiveVisual outfit={outfit} garments={visibleGarments} />
+                          <OutfitArchiveVisual outfit={outfit} garments={lookGarmentSource} />
                           <div className="archive-look-meta">
                             <time dateTime={outfit.createdAt}>
                               {new Date(outfit.createdAt).toLocaleDateString("zh-CN", {
@@ -1582,10 +1885,11 @@ function Home({ displayName }: { displayName: string }) {
                             </div>
                           </div>
                           <button
-                            className={`look-worn-btn ${outfit.lastWornAt === new Date().toISOString().slice(0, 10) ? "done" : ""}`}
+                            className={`look-worn-btn ${outfit.lastWornAt === localDateKey() ? "done" : ""}`}
                             onClick={() => markLookWorn(outfit)}
+                            disabled={outfit.lastWornAt === localDateKey()}
                           >
-                            {outfit.lastWornAt === new Date().toISOString().slice(0, 10) ? "✓ 今天已穿" : "今天穿了"}
+                            {outfit.lastWornAt === localDateKey() ? "✓ 今天已穿" : "今天穿了"}
                           </button>
                         </article>
                       ))}
@@ -1606,11 +1910,18 @@ function Home({ displayName }: { displayName: string }) {
                       )}
                       {visibleOotdPhotos.map((outfit, index) => (
                         <article key={outfit.id} className="archive-look-card">
+                          <button
+                            className="archive-card-delete"
+                            onClick={() => setRemoveTarget(outfit)}
+                            aria-label={`删除 OOTD：${outfit.name}`}
+                          >
+                            ×
+                          </button>
                           <div className="archive-look-index">
                             <span>OOTD</span>
                             <strong>{String(index + 1).padStart(2, "0")}</strong>
                           </div>
-                          <OutfitArchiveVisual outfit={outfit} garments={visibleGarments} />
+                          <OutfitArchiveVisual outfit={outfit} garments={lookGarmentSource} />
                           <div className="archive-look-meta">
                             <time dateTime={outfit.createdAt}>
                               {new Date(outfit.createdAt).toLocaleDateString("zh-CN", {
@@ -1655,7 +1966,7 @@ function Home({ displayName }: { displayName: string }) {
                   </p>
                 </div>
 
-                {!garments.length && loaded && (
+                {isDemoCloset && (
                   <div className="archive-sample-note">
                     这是示例陈列。添加第一件真实衣物后，这里会成为你的私人衣物展厅。
                   </div>
@@ -1734,7 +2045,7 @@ function Home({ displayName }: { displayName: string }) {
                 <p>件正在考虑</p>
               </div>
               <div className="decision-stat">
-                <span>{new Set(visibleGarments.map((item) => item.category)).size}</span>
+                <span>{new Set(garments.map((item) => item.category)).size}</span>
                 <p>个已有品类</p>
               </div>
               <div className="decision-rule">
@@ -1751,8 +2062,16 @@ function Home({ displayName }: { displayName: string }) {
                     <div>
                       <strong>{wish.name}</strong>
                       <span>{wish.category} · {wish.color}</span>
+                      {wish.extra.price && <small>¥ {String(wish.extra.price)}</small>}
                       <p>{String(wish.extra.recommendation || "已经收进考虑清单")}</p>
                     </div>
+                    <button
+                      className="wish-delete-button"
+                      onClick={() => setRemoveTarget(wish)}
+                      aria-label={`删除购前清单：${wish.name}`}
+                    >
+                      ×
+                    </button>
                   </article>
                 ))}
               </div>
@@ -1768,7 +2087,7 @@ function Home({ displayName }: { displayName: string }) {
       {uploadMode && (
         <UploadModal
           mode={uploadMode}
-          items={visibleGarments}
+          items={garments}
           onClose={() => setUploadMode(null)}
           onSaved={addEntry}
         />
@@ -1776,7 +2095,6 @@ function Home({ displayName }: { displayName: string }) {
       {profileOpen && (
         <ProfileModal
           displayName={displayName}
-          onSignOut={() => {}}
           onClose={() => setProfileOpen(false)}
         />
       )}
@@ -1788,6 +2106,7 @@ function Home({ displayName }: { displayName: string }) {
           onDeleted={deleteEntry}
         />
       )}
+      {notice && <div className="app-notice" role="status">{notice}</div>}
     </main>
   );
 }
