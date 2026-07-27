@@ -5119,6 +5119,158 @@ body::before {
   cursor: pointer;
 }
 
+.field textarea {
+  width: 100%;
+  min-height: 88px;
+  padding: 11px 13px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  outline: 0;
+  background: rgba(255, 255, 255, 0.75);
+  font: inherit;
+  font-size: 13px;
+}
+
+.garment-edit-button {
+  margin-top: 11px;
+  padding: 7px 9px;
+  border: 1px solid var(--ink);
+  background: #fff;
+  color: var(--ink);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  cursor: pointer;
+}
+
+.garment-edit-button:hover {
+  background: var(--ink);
+  color: #fff;
+}
+
+.garment-actions .garment-edit-button,
+.garment-actions .garment-departure-button {
+  margin-top: 0;
+}
+
+.garment-notes {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.edit-garment-summary {
+  margin-bottom: 18px;
+  display: grid;
+  grid-template-columns: 105px 1fr;
+  align-items: center;
+  border: 2px solid var(--ink);
+  background: #fff;
+}
+
+.edit-garment-summary .garment-visual {
+  min-height: 118px;
+  border-right: 2px solid var(--ink);
+}
+
+.edit-garment-summary > span {
+  padding: 16px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.ootd-linker {
+  margin: 18px 0;
+  padding: 14px;
+  border: 2px solid var(--ink);
+  background: #fff;
+}
+
+.ootd-linker legend {
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.ootd-linker > p {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.ootd-linker > small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.ootd-linker-grid {
+  max-height: 280px;
+  padding: 2px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.ootd-linker-grid button {
+  position: relative;
+  min-width: 0;
+  padding: 6px;
+  border: 2px solid transparent;
+  background: #efefeb;
+  cursor: pointer;
+}
+
+.ootd-linker-grid button.selected {
+  border-color: var(--ink);
+  box-shadow: 3px 3px 0 #ed1c24;
+  transform: translate(-1px, -1px);
+}
+
+.ootd-linker-grid .garment-visual {
+  width: 100%;
+  aspect-ratio: .82;
+}
+
+.ootd-linker-grid button > span {
+  margin-top: 6px;
+  display: block;
+  overflow: hidden;
+  font-size: 8px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ootd-linker-grid button > i {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #ed1c24;
+  color: #fff;
+  font-size: 11px;
+  font-style: normal;
+}
+
+.archive-linked-count {
+  margin-top: 4px;
+  display: block;
+  color: #ed1c24;
+  font-size: 8px;
+  font-weight: 900;
+}
+
 @media (max-width: 700px) {
   .app-notice {
     right: 16px;
@@ -5127,5 +5279,9 @@ body::before {
 
   .system-banner {
     align-items: flex-start;
+  }
+
+  .ootd-linker-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

@@ -572,7 +572,7 @@ function UploadModal({
   mode: EntryKind;
   items: Entry[];
   onClose: () => void;
-  onSaved: (entry: Entry, notice?: string) => void;
+  onSaved: (entry: Entry, notice?: string, relatedUpdates?: Entry[]) => void;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
@@ -584,6 +584,7 @@ function UploadModal({
   const [color, setColor] = useState("");
   const [season, setSeason] = useState("四季");
   const [price, setPrice] = useState("");
+  const [selectedGarmentIds, setSelectedGarmentIds] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(
@@ -647,6 +648,7 @@ function UploadModal({
         price,
         cleaned: processedImage?.cleaned ?? false,
         outfitType: mode === "outfit" ? "ootd" : "",
+        garmentIds: mode === "outfit" ? selectedGarmentIds : [],
         recommendation:
           mode === "wish"
             ? similar.length >= 3
@@ -674,6 +676,7 @@ function UploadModal({
         .single();
       if (insertError || !inserted) throw new Error("保存失败");
 
+      let savedRow = inserted as EntryRow;
       if (processedImage) {
         const imageKey = `${userId}/${inserted.id}.${ext}`;
         const { error: upErr } = await supabase.storage
@@ -697,10 +700,39 @@ function UploadModal({
           await supabase.from("entries").delete().eq("id", inserted.id);
           throw new Error("保存失败");
         }
-        onSaved(rowToEntry(updated), processedImage.notice);
-      } else {
-        onSaved(rowToEntry(inserted));
+        savedRow = updated as EntryRow;
       }
+
+      const relatedUpdates: Entry[] = [];
+      let wornSyncFailed = false;
+      if (mode === "outfit" && selectedGarmentIds.length) {
+        const today = localDateKey();
+        const selectedGarments = items.filter(
+          (item) => selectedGarmentIds.includes(item.id) && item.lastWornAt !== today,
+        );
+        for (const item of selectedGarments) {
+          const { data: updatedGarment, error: wornError } = await supabase
+            .from("entries")
+            .update({
+              worn_count: (item.wornCount || 0) + 1,
+              last_worn_at: today,
+            })
+            .eq("id", item.id)
+            .select()
+            .single();
+          if (wornError || !updatedGarment) {
+            wornSyncFailed = true;
+          } else {
+            relatedUpdates.push(rowToEntry(updatedGarment));
+          }
+        }
+      }
+
+      const notices = [
+        processedImage?.notice,
+        wornSyncFailed ? "OOTD 已保存，但部分衣物的穿着次数没有同步成功。" : "",
+      ].filter(Boolean);
+      onSaved(rowToEntry(savedRow), notices.join(" "), relatedUpdates);
     } catch {
       setError("暂时没有保存成功，请稍后再试");
     } finally {
@@ -830,6 +862,41 @@ function UploadModal({
             )}
           </div>
 
+          {mode === "outfit" && (
+            <fieldset className="ootd-linker">
+              <legend>今天穿了哪些衣物？（可选）</legend>
+              <p>选中的单品会自动记录一次“今天穿了”，以后闲置提醒才会更准确。</p>
+              {items.length ? (
+                <div className="ootd-linker-grid">
+                  {items.map((item) => {
+                    const selected = selectedGarmentIds.includes(item.id);
+                    return (
+                      <button
+                        type="button"
+                        key={item.id}
+                        className={selected ? "selected" : ""}
+                        aria-pressed={selected}
+                        onClick={() =>
+                          setSelectedGarmentIds((current) =>
+                            current.includes(item.id)
+                              ? current.filter((id) => id !== item.id)
+                              : [...current, item.id],
+                          )
+                        }
+                      >
+                        <GarmentVisual item={item} />
+                        <span>{item.name}</span>
+                        {selected && <i>✓</i>}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <small>衣橱里还没有真实衣物，可以先保存 OOTD，之后再补录。</small>
+              )}
+            </fieldset>
+          )}
+
           {mode === "wish" && category && (
             <div className={`similar-note ${similar.length >= 3 ? "warning" : ""}`}>
               <span>{similar.length}</span>
@@ -883,6 +950,121 @@ function ProfileModal({
           {busy ? "处理中…" : "退出登录"}
         </button>
         <small>这是个人衣橱版本；开放给更多人之前，建议再升级照片的私有访问方式。</small>
+      </section>
+    </div>
+  );
+}
+
+function EditGarmentModal({
+  item,
+  onClose,
+  onSaved,
+}: {
+  item: Entry;
+  onClose: () => void;
+  onSaved: (entry: Entry) => void;
+}) {
+  const [name, setName] = useState(item.name);
+  const [category, setCategory] = useState(item.category);
+  const [color, setColor] = useState(item.color);
+  const [season, setSeason] = useState(item.season);
+  const [notes, setNotes] = useState(item.notes);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!name.trim()) {
+      setError("名称不能为空");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    const { data, error: updateError } = await supabase
+      .from("entries")
+      .update({
+        name: name.trim(),
+        category,
+        color: color.trim(),
+        season,
+        notes: notes.trim(),
+      })
+      .eq("id", item.id)
+      .select()
+      .single();
+    setSaving(false);
+    if (updateError || !data) {
+      setError("资料没有保存成功，请稍后再试");
+      return;
+    }
+    onSaved(rowToEntry(data));
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="upload-modal edit-garment-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edit-garment-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="modal-head">
+          <div>
+            <p className="eyebrow">EDIT GARMENT RECORD</p>
+            <h2 id="edit-garment-title">编辑衣物资料</h2>
+          </div>
+          <button className="close-button" onClick={onClose} aria-label="关闭">
+            ×
+          </button>
+        </div>
+        <div className="edit-garment-summary">
+          <GarmentVisual item={item} />
+          <span>本次只修改资料，原照片和穿着次数会保留。</span>
+        </div>
+        <form onSubmit={submit}>
+          <div className="form-grid">
+            <label className="field full">
+              <span>名称</span>
+              <input value={name} onChange={(event) => setName(event.target.value)} />
+            </label>
+            <label className="field">
+              <span>品类</span>
+              <select value={category} onChange={(event) => setCategory(event.target.value)}>
+                {CATEGORY_OPTIONS.map((option) => (
+                  <option key={option}>{option}</option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>颜色</span>
+              <input value={color} onChange={(event) => setColor(event.target.value)} />
+            </label>
+            <label className="field full">
+              <span>适合季节</span>
+              <select value={season} onChange={(event) => setSeason(event.target.value)}>
+                <option>四季</option>
+                <option>春夏</option>
+                <option>秋冬</option>
+                <option>夏季</option>
+                <option>冬季</option>
+              </select>
+            </label>
+            <label className="field full">
+              <span>备注（选填）</span>
+              <textarea
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                placeholder="面料、尺码、购入年份、清洗方式……"
+                rows={3}
+              />
+            </label>
+          </div>
+          {error && <p className="form-error">{error}</p>}
+          <button className="primary-button wide" type="submit" disabled={saving}>
+            {saving ? "保存中…" : "保存修改"}
+          </button>
+        </form>
       </section>
     </div>
   );
@@ -1075,6 +1257,7 @@ function Home({ displayName }: { displayName: string }) {
   const [archiveView, setArchiveView] = useState<ArchiveView>("outfits");
   const [archiveCategory, setArchiveCategory] = useState("全部");
   const [removeTarget, setRemoveTarget] = useState<Entry | null>(null);
+  const [editTarget, setEditTarget] = useState<Entry | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [notice, setNotice] = useState("");
   const [query, setQuery] = useState("");
@@ -1159,10 +1342,20 @@ function Home({ displayName }: { displayName: string }) {
     return garment.category === archiveCategory;
   });
 
-  function addEntry(entry: Entry, message?: string) {
-    setEntries((current) => [entry, ...current]);
+  function addEntry(entry: Entry, message?: string, relatedUpdates: Entry[] = []) {
+    const updates = new Map(relatedUpdates.map((item) => [item.id, item]));
+    setEntries((current) => [
+      entry,
+      ...current.map((item) => updates.get(item.id) || item),
+    ]);
     setUploadMode(null);
     setNotice(message || "已保存到你的衣橱档案。");
+  }
+
+  function saveEditedEntry(entry: Entry) {
+    setEntries((current) => current.map((item) => (item.id === entry.id ? entry : item)));
+    setEditTarget(null);
+    setNotice("衣物资料已更新。");
   }
 
   function updateEntry(entry: Entry) {
@@ -1567,6 +1760,7 @@ function Home({ displayName }: { displayName: string }) {
                       {item.category} · {item.color || "未标颜色"}
                     </span>
                     <small>穿过 {item.wornCount} 次</small>
+                    {item.notes && <p className="garment-notes">{item.notes}</p>}
                     {!item.isDemo && (
                       <div className="garment-actions">
                         <button
@@ -1575,6 +1769,9 @@ function Home({ displayName }: { displayName: string }) {
                           disabled={item.lastWornAt === localDateKey()}
                         >
                           {item.lastWornAt === localDateKey() ? "今天已记" : "今天穿了"}
+                        </button>
+                        <button className="garment-edit-button" onClick={() => setEditTarget(item)}>
+                          编辑资料
                         </button>
                         <button className="garment-departure-button" onClick={() => setRemoveTarget(item)}>
                           出库 / 已售
@@ -1818,6 +2015,11 @@ function Home({ displayName }: { displayName: string }) {
                             <div>
                               <strong>{outfit.name}</strong>
                               <span>{outfit.category} / {outfit.season}</span>
+                              {Array.isArray(outfit.extra.garmentIds) && outfit.extra.garmentIds.length > 0 && (
+                                <small className="archive-linked-count">
+                                  关联 {outfit.extra.garmentIds.length} 件衣物
+                                </small>
+                              )}
                             </div>
                           </div>
                         </article>
@@ -1889,6 +2091,15 @@ function Home({ displayName }: { displayName: string }) {
                               month: "2-digit",
                             })} · 穿过 {garment.wornCount} 次
                           </small>
+                          {garment.notes && <p className="garment-notes">{garment.notes}</p>}
+                          {!garment.isDemo && (
+                            <button
+                              className="garment-edit-button"
+                              onClick={() => setEditTarget(garment)}
+                            >
+                              编辑资料
+                            </button>
+                          )}
                           {!garment.isDemo && garment.extra.status !== "removed" && (
                             <button
                               className="garment-departure-button"
@@ -1982,6 +2193,13 @@ function Home({ displayName }: { displayName: string }) {
         <ProfileModal
           displayName={displayName}
           onClose={() => setProfileOpen(false)}
+        />
+      )}
+      {editTarget && (
+        <EditGarmentModal
+          item={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={saveEditedEntry}
         />
       )}
       {removeTarget && (
