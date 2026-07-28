@@ -530,6 +530,57 @@ async function removeBackgroundLocally(
   });
 }
 
+// 拦截“全透明 / 几乎整张都被选中”的异常蒙版，避免合成出纯白废片。
+function validateForegroundMask(transparent: Blob): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const src = URL.createObjectURL(transparent);
+    const image = new Image();
+    image.onload = () => {
+      const maxSide = 220;
+      const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+      const width = Math.max(1, Math.round(image.width * scale));
+      const height = Math.max(1, Math.round(image.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) {
+        URL.revokeObjectURL(src);
+        reject(new Error("无法校验抠图结果"));
+        return;
+      }
+      context.drawImage(image, 0, 0, width, height);
+      URL.revokeObjectURL(src);
+      const pixels = context.getImageData(0, 0, width, height).data;
+      let alphaTotal = 0;
+      let visiblePixels = 0;
+      const pixelCount = width * height;
+      for (let index = 3; index < pixels.length; index += 4) {
+        const alpha = pixels[index];
+        alphaTotal += alpha;
+        if (alpha > 24) visiblePixels += 1;
+      }
+      const averageCoverage = alphaTotal / (255 * pixelCount);
+      const visibleCoverage = visiblePixels / pixelCount;
+      if (
+        !Number.isFinite(averageCoverage) ||
+        averageCoverage < 0.015 ||
+        visibleCoverage < 0.02 ||
+        averageCoverage > 0.985
+      ) {
+        reject(new Error("抠图结果没有识别到可靠主体"));
+        return;
+      }
+      resolve();
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(src);
+      reject(new Error("无法校验抠图结果"));
+    };
+    image.src = src;
+  });
+}
+
 // 把透明 PNG 合成到纯白底，输出 jpg
 function compositeOnWhite(transparent: Blob): Promise<Blob> {
   return new Promise((resolve, reject) => {
@@ -589,6 +640,8 @@ async function normalizeImage(
   }
   try {
     const transparent = await removeBackgroundLocally(scaled, onProgress);
+    onProgress?.("正在检查衣物是否被正确识别…");
+    await validateForegroundMask(transparent);
     onProgress?.("正在铺设纯白背景…");
     const whiteBackground = await compositeOnWhite(transparent);
     return { blob: whiteBackground, cleaned: true, extension: "jpg" };
@@ -597,7 +650,7 @@ async function normalizeImage(
       blob: scaled,
       cleaned: false,
       extension: "webp",
-      notice: "本地抠图没有完成，已安全保留原图；照片没有发送给第三方。",
+      notice: "本地抠图结果异常，已停止使用白底版本。请选择保留原图后再保存。",
     };
   }
 }
@@ -615,7 +668,9 @@ function UploadModal({
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
-  const [cleanBackground, setCleanBackground] = useState(mode !== "outfit");
+  const [cleanBackground, setCleanBackground] = useState(false);
+  const [processedCandidate, setProcessedCandidate] = useState<ProcessedImage | null>(null);
+  const [processedPreview, setProcessedPreview] = useState("");
   const [saving, setSaving] = useState(false);
   const [processingMessage, setProcessingMessage] = useState("");
   const [error, setError] = useState("");
@@ -630,8 +685,9 @@ function UploadModal({
   useEffect(
     () => () => {
       if (preview) URL.revokeObjectURL(preview);
+      if (processedPreview) URL.revokeObjectURL(processedPreview);
     },
-    [preview],
+    [preview, processedPreview],
   );
 
   const similar = useMemo(() => {
@@ -643,6 +699,12 @@ function UploadModal({
           (color && item.color.toLowerCase().includes(color.toLowerCase()))),
     );
   }, [items, category, color, mode]);
+
+  function clearProcessedCandidate() {
+    if (processedPreview) URL.revokeObjectURL(processedPreview);
+    setProcessedCandidate(null);
+    setProcessedPreview("");
+  }
 
   function pickFile(event: ChangeEvent<HTMLInputElement>) {
     const next = event.target.files?.[0];
@@ -658,6 +720,7 @@ function UploadModal({
       return;
     }
     if (preview) URL.revokeObjectURL(preview);
+    clearProcessedCandidate();
     setError("");
     setFile(next);
     setPreview(URL.createObjectURL(next));
@@ -676,13 +739,25 @@ function UploadModal({
       const userId = userData.user?.id;
       if (!userId) throw new Error("未登录");
 
-      // 在浏览器内压缩并尝试白底处理；失败时保留原图，不阻断录入。
-      let processedImage: ProcessedImage | null = null;
-      let ext = "webp";
-      if (file) {
-        processedImage = await normalizeImage(file, cleanBackground, setProcessingMessage);
-        ext = processedImage.extension;
+      // 白底版本必须先展示给用户确认，绝不再自动覆盖可用原图。
+      let processedImage = processedCandidate;
+      if (file && cleanBackground && !processedCandidate) {
+        const candidate = await normalizeImage(file, true, setProcessingMessage);
+        if (!candidate.cleaned) {
+          setCleanBackground(false);
+          setError(candidate.notice || "白底结果异常，已停止保存。");
+          return;
+        }
+        const candidateUrl = URL.createObjectURL(candidate.blob);
+        setProcessedCandidate(candidate);
+        setProcessedPreview(candidateUrl);
+        setError("");
+        return;
       }
+      if (file && !processedImage) {
+        processedImage = await normalizeImage(file, false, setProcessingMessage);
+      }
+      const ext = processedImage?.extension || "webp";
       setProcessingMessage("正在保存到你的衣橱…");
 
       const extra = {
@@ -840,17 +915,53 @@ function UploadModal({
           {mode !== "outfit" && (
             <label className="clean-toggle">
               <span>
-                <strong>本机白底处理</strong>
-                <small>照片不离开设备；首次使用需加载约 55MB 模型，之后会缓存</small>
+                <strong>本机白底处理（可选）</strong>
+                <small>默认关闭；处理后必须预览确认，照片不会发送给第三方</small>
               </span>
               <input
                 type="checkbox"
                 checked={cleanBackground}
-                onChange={(event) => setCleanBackground(event.target.checked)}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  setCleanBackground(checked);
+                  if (!checked) clearProcessedCandidate();
+                  setError("");
+                }}
                 disabled={saving}
               />
               <i />
             </label>
+          )}
+
+          {processedPreview && preview && (
+            <section className="background-review" aria-label="白底效果确认">
+              <div className="background-review-head">
+                <div>
+                  <strong>先确认，再保存</strong>
+                  <small>请检查衣服的颜色和轮廓；不满意就保留原图。</small>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCleanBackground(false);
+                    clearProcessedCandidate();
+                  }}
+                  disabled={saving}
+                >
+                  改用原图
+                </button>
+              </div>
+              <div className="background-review-images">
+                <figure>
+                  <img src={preview} alt="原图预览" />
+                  <figcaption>原图</figcaption>
+                </figure>
+                <figure>
+                  <img src={processedPreview} alt="白底处理预览" />
+                  <figcaption>白底预览</figcaption>
+                </figure>
+              </div>
+            </section>
           )}
 
           <div className="form-grid">
@@ -966,7 +1077,17 @@ function UploadModal({
             </p>
           )}
           <button className="primary-button wide" type="submit" disabled={saving}>
-            {saving ? processingMessage || "正在整理…" : mode === "wish" ? "生成购买建议" : "保存"}
+            {saving
+              ? processingMessage || "正在整理…"
+              : processedCandidate
+                ? mode === "wish"
+                  ? "确认白底效果并生成建议"
+                  : "确认白底效果并保存"
+                : cleanBackground && file
+                  ? "先预览白底效果"
+                  : mode === "wish"
+                    ? "生成购买建议"
+                    : "保存"}
           </button>
         </form>
       </section>
@@ -1035,8 +1156,37 @@ function EditGarmentModal({
   const [color, setColor] = useState(item.color);
   const [season, setSeason] = useState(item.season);
   const [notes, setNotes] = useState(item.notes);
+  const [replacementFile, setReplacementFile] = useState<File | null>(null);
+  const [replacementPreview, setReplacementPreview] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const replacementRef = useRef<HTMLInputElement>(null);
+
+  useEffect(
+    () => () => {
+      if (replacementPreview) URL.revokeObjectURL(replacementPreview);
+    },
+    [replacementPreview],
+  );
+
+  function pickReplacement(event: ChangeEvent<HTMLInputElement>) {
+    const next = event.target.files?.[0];
+    if (!next) return;
+    if (!next.type.startsWith("image/")) {
+      setError("请选择图片文件");
+      event.target.value = "";
+      return;
+    }
+    if (next.size > 25 * 1024 * 1024) {
+      setError("图片请控制在 25MB 以内");
+      event.target.value = "";
+      return;
+    }
+    if (replacementPreview) URL.revokeObjectURL(replacementPreview);
+    setReplacementFile(next);
+    setReplacementPreview(URL.createObjectURL(next));
+    setError("");
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -1046,28 +1196,67 @@ function EditGarmentModal({
     }
     setSaving(true);
     setError("");
-    const { data, error: updateError } = await supabase
-      .from("entries")
-      .update({
+    let replacementKey: string | null = null;
+    try {
+      if (replacementFile) {
+        const { data: userData } = await supabase.auth.getUser();
+        const userId = userData.user?.id;
+        if (!userId) throw new Error("未登录");
+        const replacement = await normalizeImage(replacementFile, false);
+        replacementKey = `${userId}/${item.id}-replacement-${Date.now()}.webp`;
+        const { error: uploadError } = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .upload(replacementKey, replacement.blob, {
+            contentType: replacement.blob.type,
+            upsert: false,
+          });
+        if (uploadError) throw new Error("照片上传失败");
+      }
+
+      const updatePayload: Record<string, unknown> = {
         name: name.trim(),
         category,
         color: color.trim(),
         season,
         notes: notes.trim(),
-      })
-      .eq("id", item.id)
-      .select()
-      .single();
-    setSaving(false);
-    if (updateError || !data) {
-      setError("资料没有保存成功，请稍后再试");
-      return;
+      };
+      if (replacementKey) {
+        updatePayload.image_key = replacementKey;
+        updatePayload.extra = { ...(item.extra || {}), cleaned: false };
+      }
+
+      const { data, error: updateError } = await supabase
+        .from("entries")
+        .update(updatePayload)
+        .eq("id", item.id)
+        .select()
+        .single();
+      if (updateError || !data) {
+        if (replacementKey) {
+          await supabase.storage.from(STORAGE_BUCKET).remove([replacementKey]);
+        }
+        throw new Error("资料更新失败");
+      }
+
+      if (replacementKey && item.imageKey && item.imageKey !== replacementKey) {
+        await supabase.storage.from(STORAGE_BUCKET).remove([item.imageKey]);
+      }
+      onSaved(rowToEntry(data));
+    } catch {
+      setError("资料或照片没有保存成功，请稍后再试");
+    } finally {
+      setSaving(false);
     }
-    onSaved(rowToEntry(data));
   }
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onMouseDown={() => {
+        if (!saving) onClose();
+      }}
+    >
       <section
         className="upload-modal edit-garment-modal"
         role="dialog"
@@ -1080,15 +1269,42 @@ function EditGarmentModal({
             <p className="eyebrow">EDIT GARMENT RECORD</p>
             <h2 id="edit-garment-title">编辑衣物资料</h2>
           </div>
-          <button className="close-button" onClick={onClose} aria-label="关闭">
+          <button className="close-button" onClick={onClose} aria-label="关闭" disabled={saving}>
             ×
           </button>
         </div>
         <div className="edit-garment-summary">
-          <GarmentVisual item={item} />
-          <span>本次只修改资料，原照片和穿着次数会保留。</span>
+          {replacementPreview ? (
+            <div className="garment-visual has-photo">
+              <img src={replacementPreview} alt="新照片预览" />
+            </div>
+          ) : (
+            <GarmentVisual item={item} />
+          )}
+          <span>
+            {replacementFile
+              ? "将用这张原图替换错误白图；名称、备注和穿着次数都会保留。"
+              : "可以只修改资料，也可以替换错误的白色照片。"}
+          </span>
         </div>
         <form onSubmit={submit}>
+          <div className="edit-photo-replacement">
+            <button
+              type="button"
+              onClick={() => replacementRef.current?.click()}
+              disabled={saving}
+            >
+              {replacementFile ? "重新选择照片" : "替换衣物照片"}
+            </button>
+            <small>修复照片时直接保存原图，不会再次自动抠白。</small>
+            <input
+              ref={replacementRef}
+              className="sr-only"
+              type="file"
+              accept="image/*"
+              onChange={pickReplacement}
+            />
+          </div>
           <div className="form-grid">
             <label className="field full">
               <span>名称</span>

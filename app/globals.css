@@ -1392,6 +1392,80 @@ select:focus-visible {
   transform: translateX(18px);
 }
 
+.background-review {
+  margin: -8px 0 20px;
+  padding: 14px;
+  border: 2px solid var(--ink);
+  background: #fff;
+}
+
+.background-review-head {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.background-review-head > div {
+  display: grid;
+  gap: 4px;
+}
+
+.background-review-head strong {
+  font-size: 12px;
+}
+
+.background-review-head small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.background-review-head button {
+  min-height: 32px;
+  padding: 0 10px;
+  flex: 0 0 auto;
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  font-size: 9px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.background-review-images {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.background-review figure {
+  position: relative;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #ecece7;
+}
+
+.background-review img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+}
+
+.background-review figcaption {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  padding: 4px 6px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 8px;
+  font-weight: 900;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -5260,6 +5334,34 @@ body::before {
   font-size: 10px;
   font-weight: 700;
   line-height: 1.6;
+}
+
+.edit-photo-replacement {
+  margin: 0 0 16px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 2px solid var(--ink);
+  background: #fff;
+}
+
+.edit-photo-replacement button {
+  min-height: 36px;
+  padding: 0 12px;
+  flex: 0 0 auto;
+  border: 0;
+  background: #ed1c24;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.edit-photo-replacement small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.45;
 }
 
 .ootd-linker {
