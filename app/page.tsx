@@ -258,11 +258,11 @@ function removalReasonLabel(reason: unknown) {
 }
 
 const NAV_ITEMS: Array<{ id: Tab; label: string; short: string }> = [
-  { id: "today", label: "今天", short: "今" },
-  { id: "closet", label: "清单", short: "衣" },
-  { id: "looks", label: "搭配", short: "搭" },
-  { id: "ootd", label: "档案馆", short: "档" },
-  { id: "consider", label: "购前想想", short: "想" },
+  { id: "today", label: "首页", short: "01" },
+  { id: "closet", label: "衣橱", short: "02" },
+  { id: "looks", label: "搭配", short: "03" },
+  { id: "ootd", label: "档案", short: "04" },
+  { id: "consider", label: "购前", short: "05" },
 ];
 
 function daysSince(date: string | null) {
@@ -370,31 +370,19 @@ function Nav({
   onChange: (tab: Tab) => void;
 }) {
   return (
-    <>
-      <nav className="desktop-nav" aria-label="主要功能">
-        {NAV_ITEMS.map((item) => (
-          <button
-            key={item.id}
-            className={active === item.id ? "active" : ""}
-            onClick={() => onChange(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
-      <nav className="mobile-nav" aria-label="主要功能">
-        {NAV_ITEMS.map((item) => (
-          <button
-            key={item.id}
-            className={active === item.id ? "active" : ""}
-            onClick={() => onChange(item.id)}
-          >
-            <span>{item.short}</span>
-            {item.label}
-          </button>
-        ))}
-      </nav>
-    </>
+    <nav className="bottom-nav" aria-label="主要功能">
+      {NAV_ITEMS.map((item) => (
+        <button
+          key={item.id}
+          className={active === item.id ? "active" : ""}
+          aria-current={active === item.id ? "page" : undefined}
+          onClick={() => onChange(item.id)}
+        >
+          <span>{item.short}</span>
+          <strong>{item.label}</strong>
+        </button>
+      ))}
+    </nav>
   );
 }
 
@@ -2145,7 +2133,6 @@ function Home({ displayName }: { displayName: string }) {
           <span>W</span>
           衣橱档案
         </button>
-        <Nav active={activeTab} onChange={setActiveTab} />
         <div className="top-actions">
           <button className="add-top" onClick={() => setUploadMode("garment")}>
             <span>＋</span> 录入单品
@@ -2167,9 +2154,8 @@ function Home({ displayName }: { displayName: string }) {
         {activeTab === "today" && (
           <section className="today-page">
             <div className="hero-copy">
-              <p className="eyebrow">我的衣橱</p>
-              <h1>
-                今天，穿得
+              <h1 aria-label="今天，穿得不那么正确。">
+                <span>今天，穿得</span>
                 <em>不那么正确。</em>
               </h1>
               {isDemoCloset && (
@@ -2774,6 +2760,8 @@ function Home({ displayName }: { displayName: string }) {
           </section>
         )}
       </div>
+
+      <Nav active={activeTab} onChange={setActiveTab} />
 
       <button className="mobile-add" onClick={() => setUploadMode("garment")} aria-label="添加衣物">
         ＋
