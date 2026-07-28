@@ -4888,6 +4888,48 @@ body::before {
   width: 60px;
   flex: 0 0 auto;
 }
+
+.look-unlinked {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-start;
+  background:
+    repeating-linear-gradient(-45deg, transparent 0 8px, rgba(5, 5, 5, .055) 8px 10px),
+    #deded9;
+}
+
+.look-unlinked::after {
+  border-style: solid;
+}
+
+.look-unlinked span,
+.look-unlinked strong,
+.look-unlinked small {
+  position: relative;
+  z-index: 1;
+}
+
+.look-unlinked span {
+  margin-bottom: auto;
+  color: #ed1c24;
+  font-family: "Courier New", monospace;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .13em;
+}
+
+.look-unlinked strong {
+  font-size: 13px;
+}
+
+.look-unlinked small {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
 /* 档案馆卡片删除按钮 */
 .archive-card-delete {
   position: absolute;

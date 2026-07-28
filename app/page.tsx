@@ -333,7 +333,19 @@ function OutfitArchiveVisual({
     );
   }
 
-  // demo 数据：用 offset 假拼贴
+  // 只有示例数据可以使用假拼贴。真实旧记录没有关联 ID 时必须保持为空，
+  // 不能拿当前衣橱里的新衣物填充，否则每次新增衣物都会改写旧造型的画面。
+  if (!outfit.isDemo) {
+    return (
+      <div className="archive-look-visual look-unlinked" aria-label={`${outfit.name}，未记录关联衣物`}>
+        <span>NO ITEMS LINKED</span>
+        <strong>旧方案未记录单品</strong>
+        <small>新增衣物不会再自动加入</small>
+      </div>
+    );
+  }
+
+  // demo 数据：用 offset 生成固定的示例拼贴
   const offset = Number(outfit.extra.demoOffset || 0);
   const pieces = Array.from({ length: Math.min(3, garments.length) }, (_, index) => {
     return garments[(offset + index) % garments.length];
