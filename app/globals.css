@@ -5688,8 +5688,12 @@ body::before {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   overflow: hidden;
   border: 3px solid var(--ink);
-  background: var(--ink);
-  box-shadow: 8px 8px 0 #ed1c24;
+  background: rgba(247, 245, 239, .98);
+  box-shadow:
+    0 0 0 4px rgba(247, 245, 239, .96),
+    8px 8px 0 #ed1c24,
+    0 18px 42px rgba(5, 5, 5, .22);
+  backdrop-filter: blur(14px);
   transform: translateX(-50%);
 }
 
@@ -5702,9 +5706,9 @@ body::before {
   align-items: center;
   gap: 9px;
   border: 0;
-  border-right: 1px solid rgba(255, 255, 255, .28);
-  background: var(--ink);
-  color: rgba(255, 255, 255, .68);
+  border-right: 1px solid rgba(5, 5, 5, .32);
+  background: transparent;
+  color: var(--ink);
   text-align: left;
   cursor: pointer;
 }
@@ -5728,8 +5732,8 @@ body::before {
 }
 
 .bottom-nav button:hover {
-  color: #fff;
-  background: #262626;
+  color: var(--ink);
+  background: #deded9;
 }
 
 .bottom-nav button.active {
@@ -5748,7 +5752,7 @@ body::before {
   left: 0;
   width: 100%;
   height: 4px;
-  background: #fff;
+  background: var(--ink);
 }
 
 .hero-copy {
@@ -5842,7 +5846,10 @@ body::before {
     width: auto;
     min-height: 66px;
     border-width: 2px;
-    box-shadow: 5px 5px 0 #ed1c24;
+    box-shadow:
+      0 0 0 3px rgba(247, 245, 239, .98),
+      5px 5px 0 #ed1c24,
+      0 12px 28px rgba(5, 5, 5, .24);
     transform: none;
   }
 
