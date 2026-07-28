@@ -6,6 +6,7 @@
 import {
   ChangeEvent,
   FormEvent,
+  PointerEvent as ReactPointerEvent,
   useEffect,
   useMemo,
   useRef,
@@ -495,7 +496,7 @@ function scaleToBlob(file: File): Promise<Blob> {
 
 type ImageProcessProgress = (message: string) => void;
 
-// 模型和照片都在浏览器内处理。模型文件由本站托管，照片不会发给第三方抠图服务。
+// 模型在浏览器中加载并缓存，照片始终只在浏览器内处理。
 async function removeBackgroundLocally(
   image: Blob,
   onProgress?: ImageProcessProgress,
@@ -503,8 +504,8 @@ async function removeBackgroundLocally(
   onProgress?.("正在载入本地抠图引擎…");
   const { removeBackground } = await import("@imgly/background-removal");
   return removeBackground(image, {
-    publicPath: `${window.location.origin}/bg-model/1.7.0/`,
-    model: "isnet_quint8",
+    publicPath: "https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/",
+    model: "isnet_fp16",
     device: "cpu",
     output: {
       format: "image/png",
@@ -514,7 +515,7 @@ async function removeBackgroundLocally(
       if (key.startsWith("fetch:")) {
         const percent = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
         const label = key.includes("/models/")
-          ? "首次加载本地抠图模型"
+          ? "首次加载高精度本地模型"
           : "正在准备本地抠图引擎";
         onProgress?.(`${label} ${percent}%`);
         return;
@@ -626,7 +627,277 @@ type ProcessedImage = {
   cleaned: boolean;
   extension: "jpg" | "webp";
   notice?: string;
+  sourceBlob?: Blob;
+  transparentBlob?: Blob;
 };
+
+type MaskBrushMode = "restore" | "erase";
+
+function BackgroundMaskEditor({
+  original,
+  transparent,
+  onClose,
+  onApply,
+}: {
+  original: Blob;
+  transparent: Blob;
+  onClose: () => void;
+  onApply: (transparent: Blob) => Promise<void>;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const originalImageRef = useRef<HTMLImageElement | null>(null);
+  const automaticImageRef = useRef<HTMLImageElement | null>(null);
+  const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+  const activePointerRef = useRef<number | null>(null);
+  const undoRef = useRef<ImageData | null>(null);
+  const [brushMode, setBrushMode] = useState<MaskBrushMode>("restore");
+  const [brushSize, setBrushSize] = useState(28);
+  const [ready, setReady] = useState(false);
+  const [canUndo, setCanUndo] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [editorError, setEditorError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    const originalUrl = URL.createObjectURL(original);
+    const transparentUrl = URL.createObjectURL(transparent);
+
+    function loadImage(url: string): Promise<HTMLImageElement> {
+      return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error("无法读取待修边图片"));
+        image.src = url;
+      });
+    }
+
+    Promise.all([loadImage(originalUrl), loadImage(transparentUrl)])
+      .then(([originalImage, automaticImage]) => {
+        if (cancelled) return;
+        const canvas = canvasRef.current;
+        const context = canvas?.getContext("2d", { willReadFrequently: true });
+        if (!canvas || !context) throw new Error("无法启动修边工具");
+        canvas.width = automaticImage.naturalWidth;
+        canvas.height = automaticImage.naturalHeight;
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(automaticImage, 0, 0, canvas.width, canvas.height);
+        originalImageRef.current = originalImage;
+        automaticImageRef.current = automaticImage;
+        setReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setEditorError("修边工具没有成功打开，请保留原图。");
+      });
+
+    return () => {
+      cancelled = true;
+      URL.revokeObjectURL(originalUrl);
+      URL.revokeObjectURL(transparentUrl);
+    };
+  }, [original, transparent]);
+
+  function canvasPoint(event: ReactPointerEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: ((event.clientX - rect.left) / rect.width) * canvas.width,
+      y: ((event.clientY - rect.top) / rect.height) * canvas.height,
+    };
+  }
+
+  function paintBetween(
+    start: { x: number; y: number },
+    end: { x: number; y: number },
+  ) {
+    const canvas = canvasRef.current;
+    const originalImage = originalImageRef.current;
+    const context = canvas?.getContext("2d", { willReadFrequently: true });
+    if (!canvas || !context || !originalImage) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const radius = Math.max(2, (brushSize * canvas.width) / Math.max(1, rect.width));
+    const distance = Math.hypot(end.x - start.x, end.y - start.y);
+    const steps = Math.max(1, Math.ceil(distance / Math.max(1, radius * 0.35)));
+
+    context.save();
+    context.beginPath();
+    for (let index = 0; index <= steps; index += 1) {
+      const progress = index / steps;
+      const x = start.x + (end.x - start.x) * progress;
+      const y = start.y + (end.y - start.y) * progress;
+      context.moveTo(x + radius, y);
+      context.arc(x, y, radius, 0, Math.PI * 2);
+    }
+
+    if (brushMode === "erase") {
+      context.globalCompositeOperation = "destination-out";
+      context.fillStyle = "#000";
+      context.fill();
+    } else {
+      context.clip();
+      context.globalCompositeOperation = "source-over";
+      context.drawImage(originalImage, 0, 0, canvas.width, canvas.height);
+    }
+    context.restore();
+  }
+
+  function startStroke(event: ReactPointerEvent<HTMLCanvasElement>) {
+    if (!ready || applying) return;
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d", { willReadFrequently: true });
+    if (!canvas || !context) return;
+    undoRef.current = context.getImageData(0, 0, canvas.width, canvas.height);
+    setCanUndo(true);
+    activePointerRef.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const point = canvasPoint(event);
+    lastPointRef.current = point;
+    paintBetween(point, point);
+  }
+
+  function continueStroke(event: ReactPointerEvent<HTMLCanvasElement>) {
+    if (activePointerRef.current !== event.pointerId || !lastPointRef.current) return;
+    const point = canvasPoint(event);
+    paintBetween(lastPointRef.current, point);
+    lastPointRef.current = point;
+  }
+
+  function finishStroke(event: ReactPointerEvent<HTMLCanvasElement>) {
+    if (activePointerRef.current !== event.pointerId) return;
+    activePointerRef.current = null;
+    lastPointRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  function restoreAutomaticResult() {
+    const canvas = canvasRef.current;
+    const automaticImage = automaticImageRef.current;
+    const context = canvas?.getContext("2d", { willReadFrequently: true });
+    if (!canvas || !context || !automaticImage) return;
+    undoRef.current = context.getImageData(0, 0, canvas.width, canvas.height);
+    setCanUndo(true);
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(automaticImage, 0, 0, canvas.width, canvas.height);
+  }
+
+  function undoLastStroke() {
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d", { willReadFrequently: true });
+    if (!canvas || !context || !undoRef.current) return;
+    context.putImageData(undoRef.current, 0, 0);
+    undoRef.current = null;
+    setCanUndo(false);
+  }
+
+  async function applyCorrection() {
+    const canvas = canvasRef.current;
+    if (!canvas || !ready) return;
+    setApplying(true);
+    setEditorError("");
+    try {
+      const edited = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error("无法生成修边结果"));
+          },
+          "image/png",
+          1,
+        );
+      });
+      await onApply(edited);
+    } catch {
+      setEditorError("修边结果没有成功生成，请再试一次或保留原图。");
+    } finally {
+      setApplying(false);
+    }
+  }
+
+  return (
+    <div className="mask-editor-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="mask-editor"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mask-editor-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <span className="eyebrow">LOCAL EDGE REPAIR</span>
+            <h3 id="mask-editor-title">手动修边</h3>
+            <p>自动结果不准的地方直接涂回来或擦掉；所有操作仍只在本机完成。</p>
+          </div>
+          <button type="button" className="close-button" onClick={onClose} aria-label="关闭">
+            ×
+          </button>
+        </header>
+
+        <div className="mask-editor-canvas-wrap">
+          {!ready && !editorError && <span>正在准备修边画布…</span>}
+          <canvas
+            ref={canvasRef}
+            aria-label="衣物蒙版修边画布"
+            onPointerDown={startStroke}
+            onPointerMove={continueStroke}
+            onPointerUp={finishStroke}
+            onPointerCancel={finishStroke}
+          />
+        </div>
+
+        <div className="mask-editor-tools">
+          <div className="mask-editor-modes" aria-label="修边模式">
+            <button
+              type="button"
+              className={brushMode === "restore" ? "active" : ""}
+              onClick={() => setBrushMode("restore")}
+            >
+              ＋ 恢复衣物
+            </button>
+            <button
+              type="button"
+              className={brushMode === "erase" ? "active" : ""}
+              onClick={() => setBrushMode("erase")}
+            >
+              − 擦除背景
+            </button>
+          </div>
+          <label>
+            <span>笔刷大小</span>
+            <input
+              type="range"
+              min="8"
+              max="64"
+              value={brushSize}
+              onChange={(event) => setBrushSize(Number(event.target.value))}
+            />
+          </label>
+          <div className="mask-editor-history">
+            <button type="button" onClick={undoLastStroke} disabled={!canUndo || applying}>
+              撤销上一笔
+            </button>
+            <button type="button" onClick={restoreAutomaticResult} disabled={!ready || applying}>
+              恢复自动结果
+            </button>
+          </div>
+        </div>
+
+        {editorError && <p className="form-error">{editorError}</p>}
+        <footer>
+          <button type="button" onClick={onClose} disabled={applying}>
+            取消
+          </button>
+          <button type="button" className="primary-button" onClick={applyCorrection} disabled={!ready || applying}>
+            {applying ? "正在生成…" : "完成修边"}
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
 
 async function normalizeImage(
   file: File,
@@ -644,7 +915,13 @@ async function normalizeImage(
     await validateForegroundMask(transparent);
     onProgress?.("正在铺设纯白背景…");
     const whiteBackground = await compositeOnWhite(transparent);
-    return { blob: whiteBackground, cleaned: true, extension: "jpg" };
+    return {
+      blob: whiteBackground,
+      cleaned: true,
+      extension: "jpg",
+      sourceBlob: scaled,
+      transparentBlob: transparent,
+    };
   } catch {
     return {
       blob: scaled,
@@ -671,6 +948,7 @@ function UploadModal({
   const [cleanBackground, setCleanBackground] = useState(false);
   const [processedCandidate, setProcessedCandidate] = useState<ProcessedImage | null>(null);
   const [processedPreview, setProcessedPreview] = useState("");
+  const [maskEditorOpen, setMaskEditorOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [processingMessage, setProcessingMessage] = useState("");
   const [error, setError] = useState("");
@@ -682,13 +960,13 @@ function UploadModal({
   const [selectedGarmentIds, setSelectedGarmentIds] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  useEffect(
-    () => () => {
-      if (preview) URL.revokeObjectURL(preview);
-      if (processedPreview) URL.revokeObjectURL(processedPreview);
-    },
-    [preview, processedPreview],
-  );
+  useEffect(() => () => {
+    if (preview) URL.revokeObjectURL(preview);
+  }, [preview]);
+
+  useEffect(() => () => {
+    if (processedPreview) URL.revokeObjectURL(processedPreview);
+  }, [processedPreview]);
 
   const similar = useMemo(() => {
     if (mode !== "wish") return [];
@@ -702,8 +980,24 @@ function UploadModal({
 
   function clearProcessedCandidate() {
     if (processedPreview) URL.revokeObjectURL(processedPreview);
+    setMaskEditorOpen(false);
     setProcessedCandidate(null);
     setProcessedPreview("");
+  }
+
+  async function applyMaskCorrection(transparent: Blob) {
+    if (!processedCandidate?.sourceBlob) throw new Error("缺少原图");
+    await validateForegroundMask(transparent);
+    const whiteBackground = await compositeOnWhite(transparent);
+    setProcessedCandidate({
+      ...processedCandidate,
+      blob: whiteBackground,
+      cleaned: true,
+      extension: "jpg",
+      transparentBlob: transparent,
+    });
+    setProcessedPreview(URL.createObjectURL(whiteBackground));
+    setMaskEditorOpen(false);
   }
 
   function pickFile(event: ChangeEvent<HTMLInputElement>) {
@@ -915,8 +1209,8 @@ function UploadModal({
           {mode !== "outfit" && (
             <label className="clean-toggle">
               <span>
-                <strong>本机白底处理（可选）</strong>
-                <small>默认关闭；处理后必须预览确认，照片不会发送给第三方</small>
+                <strong>高精度本机白底（可选）</strong>
+                <small>首次约 100MB；先预览再确认，照片不会发送给第三方</small>
               </span>
               <input
                 type="checkbox"
@@ -938,18 +1232,29 @@ function UploadModal({
               <div className="background-review-head">
                 <div>
                   <strong>先确认，再保存</strong>
-                  <small>请检查衣服的颜色和轮廓；不满意就保留原图。</small>
+                  <small>请检查衣服的颜色和轮廓；识别不准可以手动修边。</small>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCleanBackground(false);
-                    clearProcessedCandidate();
-                  }}
-                  disabled={saving}
-                >
-                  改用原图
-                </button>
+                <div className="background-review-actions">
+                  {processedCandidate?.sourceBlob && processedCandidate.transparentBlob && (
+                    <button
+                      type="button"
+                      onClick={() => setMaskEditorOpen(true)}
+                      disabled={saving}
+                    >
+                      手动修边
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCleanBackground(false);
+                      clearProcessedCandidate();
+                    }}
+                    disabled={saving}
+                  >
+                    改用原图
+                  </button>
+                </div>
               </div>
               <div className="background-review-images">
                 <figure>
@@ -963,6 +1268,17 @@ function UploadModal({
               </div>
             </section>
           )}
+
+          {maskEditorOpen &&
+            processedCandidate?.sourceBlob &&
+            processedCandidate.transparentBlob && (
+              <BackgroundMaskEditor
+                original={processedCandidate.sourceBlob}
+                transparent={processedCandidate.transparentBlob}
+                onClose={() => setMaskEditorOpen(false)}
+                onApply={applyMaskCorrection}
+              />
+            )}
 
           <div className="form-grid">
             <label className="field full">

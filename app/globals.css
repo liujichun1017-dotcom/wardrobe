@@ -1422,10 +1422,15 @@ select:focus-visible {
   line-height: 1.4;
 }
 
+.background-review-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
 .background-review-head button {
   min-height: 32px;
   padding: 0 10px;
-  flex: 0 0 auto;
   border: 1px solid var(--ink);
   background: transparent;
   color: var(--ink);
@@ -1464,6 +1469,149 @@ select:focus-visible {
   color: #fff;
   font-size: 8px;
   font-weight: 900;
+}
+
+.mask-editor-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+  padding: 20px;
+  display: grid;
+  place-items: center;
+  background: rgba(5, 5, 5, .86);
+}
+
+.mask-editor {
+  width: min(720px, 100%);
+  max-height: calc(100vh - 40px);
+  padding: 22px;
+  overflow-y: auto;
+  border: 3px solid var(--ink);
+  background: var(--paper);
+  box-shadow: 12px 12px 0 #ed1c24;
+}
+
+.mask-editor > header {
+  margin-bottom: 14px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.mask-editor h3 {
+  margin: 2px 0 4px;
+  font-family: "Arial Black", "PingFang SC", sans-serif;
+  font-size: 30px;
+  letter-spacing: -.06em;
+}
+
+.mask-editor header p {
+  max-width: 540px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.mask-editor-canvas-wrap {
+  min-height: 240px;
+  max-height: 55vh;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  border: 2px solid var(--ink);
+  background-color: #fff;
+  background-image:
+    linear-gradient(45deg, #d7d7d2 25%, transparent 25%),
+    linear-gradient(-45deg, #d7d7d2 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #d7d7d2 75%),
+    linear-gradient(-45deg, transparent 75%, #d7d7d2 75%);
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  background-size: 16px 16px;
+}
+
+.mask-editor-canvas-wrap > span {
+  padding: 40px 20px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.mask-editor canvas {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: calc(55vh - 4px);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.mask-editor-tools {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.mask-editor-modes,
+.mask-editor-history {
+  display: flex;
+  gap: 6px;
+}
+
+.mask-editor-tools button,
+.mask-editor footer > button:first-child {
+  min-height: 36px;
+  padding: 0 11px;
+  border: 2px solid var(--ink);
+  background: #fff;
+  color: var(--ink);
+  font-size: 9px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.mask-editor-tools button.active {
+  background: var(--ink);
+  color: #fff;
+}
+
+.mask-editor-tools button:disabled,
+.mask-editor footer button:disabled {
+  cursor: not-allowed;
+  opacity: .42;
+}
+
+.mask-editor-tools > label {
+  min-width: 120px;
+  display: grid;
+  gap: 4px;
+}
+
+.mask-editor-tools label span {
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.mask-editor-tools input[type="range"] {
+  width: 100%;
+  accent-color: #ed1c24;
+}
+
+.mask-editor > footer {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.mask-editor > footer .primary-button {
+  width: auto;
+  min-height: 42px;
+  margin: 0;
+  padding: 0 22px;
 }
 
 .form-grid {
@@ -1985,6 +2133,54 @@ select:focus-visible {
 
   .field.full {
     grid-column: auto;
+  }
+
+  .background-review-head {
+    display: grid;
+  }
+
+  .background-review-actions {
+    width: 100%;
+  }
+
+  .background-review-actions button {
+    flex: 1;
+  }
+
+  .mask-editor-backdrop {
+    padding: 0;
+    align-items: end;
+  }
+
+  .mask-editor {
+    width: 100%;
+    max-height: 96vh;
+    padding: 18px 14px 24px;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    box-shadow: none;
+  }
+
+  .mask-editor h3 {
+    font-size: 26px;
+  }
+
+  .mask-editor-canvas-wrap {
+    max-height: 47vh;
+  }
+
+  .mask-editor canvas {
+    max-height: calc(47vh - 4px);
+  }
+
+  .mask-editor-tools {
+    grid-template-columns: 1fr;
+  }
+
+  .mask-editor-modes button,
+  .mask-editor-history button {
+    flex: 1;
   }
 }
 
