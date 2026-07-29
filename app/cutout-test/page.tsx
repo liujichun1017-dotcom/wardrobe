@@ -5,58 +5,11 @@
 
 import Link from "next/link";
 import { ChangeEvent, useEffect, useRef, useState } from "react";
+import { removeBackgroundWithRmbg } from "@/lib/local-cutout";
 import styles from "./cutout-test.module.css";
-
-type LocalCutoutImage = {
-  toBlob: (type?: string, quality?: number) => Promise<Blob>;
-};
-
-type LocalCutoutRunner = (image: string) => Promise<LocalCutoutImage[]>;
-
-let cutoutRunnerPromise: Promise<LocalCutoutRunner> | null = null;
 
 const PUBLIC_TEST_IMAGE =
   "https://images.unsplash.com/photo-1581655353564-df123a1eb820?auto=format&fit=crop&fm=jpg&q=82&w=1400";
-
-function loadRmbgRunner(
-  onProgress: (message: string) => void,
-): Promise<LocalCutoutRunner> {
-  if (!cutoutRunnerPromise) {
-    cutoutRunnerPromise = import("@huggingface/transformers").then(
-      async ({ pipeline }) => {
-        const runner = await pipeline(
-          "background-removal",
-          "briaai/RMBG-1.4",
-          {
-            device: "wasm",
-            dtype: "q8",
-            progress_callback: (event: unknown) => {
-              const progress = event as {
-                status?: string;
-                progress?: number;
-                file?: string;
-              };
-              if (
-                progress.status === "progress" &&
-                Number.isFinite(progress.progress)
-              ) {
-                onProgress(
-                  `首次加载本地模型 ${Math.round(progress.progress || 0)}%`,
-                );
-              } else if (progress.status === "ready") {
-                onProgress("本地模型已就绪");
-              } else if (progress.status === "initiate") {
-                onProgress("正在准备本地模型…");
-              }
-            },
-          },
-        );
-        return runner as unknown as LocalCutoutRunner;
-      },
-    );
-  }
-  return cutoutRunnerPromise;
-}
 
 function studioFrame(transparent: Blob): Promise<Blob> {
   return new Promise((resolve, reject) => {
@@ -267,14 +220,9 @@ export default function CutoutTestPage() {
     setError("");
     setElapsed(null);
     const startedAt = performance.now();
-    const inputUrl = URL.createObjectURL(file);
     try {
       setStatus("正在加载新的本地抠图模型…");
-      const runner = await loadRmbgRunner(setStatus);
-      setStatus("正在本机识别衣物轮廓…");
-      const output = await runner(inputUrl);
-      if (!output[0]) throw new Error("模型没有返回结果");
-      const transparent = await output[0].toBlob("image/png", 1);
+      const transparent = await removeBackgroundWithRmbg(file, setStatus);
       setStatus("正在生成统一白底陈列图…");
       const framed = await studioFrame(transparent);
       if (resultUrl) URL.revokeObjectURL(resultUrl);
@@ -287,7 +235,6 @@ export default function CutoutTestPage() {
       setError(`${message}。原图没有上传，也没有被修改。`);
       setStatus("测试未完成");
     } finally {
-      URL.revokeObjectURL(inputUrl);
       setRunning(false);
     }
   }

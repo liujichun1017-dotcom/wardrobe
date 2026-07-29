@@ -13,6 +13,7 @@ import {
   useState,
 } from "react";
 import { supabase, STORAGE_BUCKET } from "@/lib/supabase";
+import { removeBackgroundWithRmbg } from "@/lib/local-cutout";
 import AuthGate from "@/app/AuthGate";
 import AddToHomeScreen from "@/app/AddToHomeScreen";
 
@@ -522,41 +523,6 @@ function scaleToBlob(file: File): Promise<Blob> {
 
 type ImageProcessProgress = (message: string) => void;
 
-// 模型在浏览器中加载并缓存，照片始终只在浏览器内处理。
-async function removeBackgroundLocally(
-  image: Blob,
-  onProgress?: ImageProcessProgress,
-): Promise<Blob> {
-  onProgress?.("正在载入本地抠图引擎…");
-  const { removeBackground } = await import("@imgly/background-removal");
-  return removeBackground(image, {
-    publicPath: "https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/",
-    model: "isnet_fp16",
-    device: "cpu",
-    output: {
-      format: "image/png",
-      quality: 1,
-    },
-    progress: (key: string, current: number, total: number) => {
-      if (key.startsWith("fetch:")) {
-        const percent = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
-        const label = key.includes("/models/")
-          ? "首次加载高精度本地模型"
-          : "正在准备本地抠图引擎";
-        onProgress?.(`${label} ${percent}%`);
-        return;
-      }
-      const computeMessages: Record<string, string> = {
-        "compute:decode": "正在读取照片…",
-        "compute:inference": "正在本机识别衣物轮廓…",
-        "compute:mask": "正在清理衣物边缘…",
-        "compute:encode": "正在生成白底照片…",
-      };
-      onProgress?.(computeMessages[key] || "正在本机处理照片…");
-    },
-  });
-}
-
 // 拦截“全透明 / 几乎整张都被选中”的异常蒙版，避免合成出纯白废片。
 function validateForegroundMask(transparent: Blob): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -1012,7 +978,7 @@ async function normalizeImage(
     return { blob: scaled, cleaned: false, extension: "webp" };
   }
   try {
-    const transparent = await removeBackgroundLocally(scaled, onProgress);
+    const transparent = await removeBackgroundWithRmbg(scaled, onProgress);
     onProgress?.("正在检查衣物是否被正确识别…");
     await validateForegroundMask(transparent);
     onProgress?.("正在把衣服缩小居中并铺设白底…");
@@ -1047,8 +1013,8 @@ function UploadModal({
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
-  // Local cutout stays opt-in until a replacement model passes real garment tests.
-  const [cleanBackground, setCleanBackground] = useState(false);
+  // 新模型已通过真实线上难例测试；仍然先预览，再由用户确认保存。
+  const [cleanBackground, setCleanBackground] = useState(mode !== "outfit");
   const [processedCandidate, setProcessedCandidate] = useState<ProcessedImage | null>(null);
   const [processedPreview, setProcessedPreview] = useState("");
   const [maskEditorOpen, setMaskEditorOpen] = useState(false);
@@ -1341,8 +1307,8 @@ function UploadModal({
           {mode !== "outfit" && (
             <label className="clean-toggle">
               <span>
-                <strong>实验性本机抠图（先预览）</strong>
-                <small>白色、浅色和细边缘可能误删；不满意请直接改用原图</small>
+                <strong>本机智能白底（推荐）</strong>
+                <small>先生成预览；不满意可改用原图，或手动擦除衣架和多余边缘</small>
               </span>
               <input
                 type="checkbox"
