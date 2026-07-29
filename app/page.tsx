@@ -287,12 +287,16 @@ function removalReasonLabel(reason: unknown) {
   return REMOVAL_REASONS.find((item) => item.id === reason)?.label || "已出库";
 }
 
-const NAV_ITEMS: Array<{ id: Tab; label: string; short: string }> = [
-  { id: "today", label: "首页", short: "01" },
-  { id: "closet", label: "衣橱", short: "02" },
-  { id: "looks", label: "搭配", short: "03" },
-  { id: "ootd", label: "档案", short: "04" },
-  { id: "consider", label: "购前", short: "05" },
+const NAV_ITEMS: Array<{
+  id: Tab;
+  label: string;
+  icon: "home" | "closet" | "looks" | "archive" | "consider";
+}> = [
+  { id: "today", label: "首页", icon: "home" },
+  { id: "closet", label: "衣橱", icon: "closet" },
+  { id: "looks", label: "搭配", icon: "looks" },
+  { id: "ootd", label: "档案", icon: "archive" },
+  { id: "consider", label: "购前", icon: "consider" },
 ];
 
 function daysSince(date: string | null) {
@@ -408,7 +412,9 @@ function Nav({
           aria-current={active === item.id ? "page" : undefined}
           onClick={() => onChange(item.id)}
         >
-          <span>{item.short}</span>
+          <span className={`nav-icon nav-icon-${item.icon}`} aria-hidden="true">
+            <i />
+          </span>
           <strong>{item.label}</strong>
         </button>
       ))}

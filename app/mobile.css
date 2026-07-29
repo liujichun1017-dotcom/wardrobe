@@ -1,0 +1,634 @@
+/*
+ * Mobile product system
+ * One title scale, one icon family, and phone-first section proportions.
+ * Imported after globals.css so mobile presentation has a single owner.
+ */
+
+.nav-icon {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  display: block;
+  flex: 0 0 24px;
+  color: currentColor;
+}
+
+.nav-icon::before,
+.nav-icon::after,
+.nav-icon i {
+  content: "";
+  position: absolute;
+  box-sizing: border-box;
+  display: block;
+}
+
+.nav-icon-home::before {
+  top: 4px;
+  left: 6px;
+  width: 12px;
+  height: 12px;
+  border-top: 1.7px solid currentColor;
+  border-left: 1.7px solid currentColor;
+  border-radius: 2px 0 0;
+  transform: rotate(45deg);
+}
+
+.nav-icon-home i {
+  right: 5px;
+  bottom: 3px;
+  left: 5px;
+  height: 12px;
+  border: 1.7px solid currentColor;
+  border-top: 0;
+  border-radius: 0 0 3px 3px;
+  background: var(--card);
+}
+
+.nav-icon-home::after {
+  bottom: 4px;
+  left: 10px;
+  width: 4px;
+  height: 7px;
+  border: 1.5px solid currentColor;
+  border-bottom: 0;
+}
+
+.nav-icon-closet i {
+  inset: 3px 4px 2px;
+  border: 1.7px solid currentColor;
+  border-radius: 3px 3px 2px 2px;
+}
+
+.nav-icon-closet::before {
+  top: 4px;
+  bottom: 3px;
+  left: 50%;
+  width: 1.5px;
+  background: currentColor;
+  transform: translateX(-50%);
+}
+
+.nav-icon-closet::after {
+  top: 12px;
+  left: 9px;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 4px 0 0 currentColor;
+}
+
+.nav-icon-looks::before {
+  top: 1px;
+  left: 9px;
+  width: 7px;
+  height: 7px;
+  border: 1.7px solid currentColor;
+  border-bottom-color: transparent;
+  border-left-color: transparent;
+  border-radius: 50%;
+  transform: rotate(-38deg);
+}
+
+.nav-icon-looks::after {
+  top: 8px;
+  left: 11px;
+  width: 1.7px;
+  height: 5px;
+  background: currentColor;
+}
+
+.nav-icon-looks i {
+  right: 2px;
+  bottom: 3px;
+  left: 2px;
+  height: 11px;
+  border-right: 1.7px solid currentColor;
+  border-bottom: 1.7px solid currentColor;
+  border-left: 1.7px solid currentColor;
+  border-radius: 0 0 5px 5px;
+  clip-path: polygon(50% 0, 100% 76%, 100% 100%, 0 100%, 0 76%);
+}
+
+.nav-icon-archive i {
+  inset: 3px 4px 2px;
+  border: 1.7px solid currentColor;
+  border-radius: 3px;
+}
+
+.nav-icon-archive::before {
+  top: 8px;
+  left: 8px;
+  width: 9px;
+  height: 1.5px;
+  border-radius: 99px;
+  background: currentColor;
+  box-shadow: 0 4px 0 currentColor, 0 8px 0 currentColor;
+}
+
+.nav-icon-archive::after {
+  top: 3px;
+  right: 4px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 0 2px var(--card);
+}
+
+.nav-icon-consider i {
+  right: 4px;
+  bottom: 2px;
+  left: 4px;
+  height: 16px;
+  border: 1.7px solid currentColor;
+  border-radius: 3px 3px 5px 5px;
+}
+
+.nav-icon-consider::before {
+  top: 2px;
+  left: 8px;
+  width: 8px;
+  height: 8px;
+  border: 1.7px solid currentColor;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+}
+
+.nav-icon-consider::after {
+  right: 5px;
+  bottom: 3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 0 2px var(--card);
+}
+
+@media (max-width: 700px) {
+  :root {
+    --mobile-page-title: 38px;
+    --mobile-section-title: 23px;
+    --mobile-card-title: 20px;
+    --mobile-gutter: 16px;
+  }
+
+  body {
+    background: #f5f4ef;
+  }
+
+  .app-shell {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .page-wrap {
+    width: calc(100% - (var(--mobile-gutter) * 2));
+  }
+
+  .topbar {
+    min-height: 54px;
+    padding: 0 var(--mobile-gutter);
+  }
+
+  .wordmark {
+    gap: 8px;
+    font-size: 15px;
+    font-weight: 720;
+  }
+
+  .wordmark span {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+
+  .profile-button {
+    width: 32px;
+    height: 32px;
+    font-size: 11px;
+  }
+
+  .bottom-nav {
+    right: 10px;
+    bottom: calc(9px + env(safe-area-inset-bottom, 0px));
+    left: 10px;
+    width: auto;
+    min-height: 70px;
+    padding: 4px;
+    overflow: visible;
+    border: 1px solid rgba(17, 17, 15, .16);
+    border-radius: 22px;
+    background: rgba(251, 250, 247, .97);
+    box-shadow: 0 10px 30px rgba(17, 17, 15, .14);
+  }
+
+  .bottom-nav button {
+    min-width: 0;
+    padding: 7px 2px 6px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    border-radius: 16px;
+    color: #77756f;
+    text-align: center;
+  }
+
+  .bottom-nav button:hover {
+    background: transparent;
+  }
+
+  .bottom-nav button strong {
+    font-size: 9px;
+    font-weight: 620;
+    line-height: 1;
+    letter-spacing: .01em;
+  }
+
+  .bottom-nav button.active {
+    background: rgba(226, 29, 43, .055);
+    color: var(--ink);
+  }
+
+  .bottom-nav button.active .nav-icon {
+    color: var(--red);
+  }
+
+  .bottom-nav button.active::before {
+    top: auto;
+    bottom: 3px;
+    left: 50%;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--red);
+    transform: translateX(-50%);
+  }
+
+  .mobile-add {
+    right: 16px;
+    bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+    width: 46px;
+    height: 46px;
+    border-radius: 48% 52% 43% 57%;
+    font-size: 24px;
+  }
+
+  /* The opening line is an editorial headline; every actual page title below
+     uses one shared size. */
+  .hero-copy {
+    min-height: 238px;
+    padding: 44px 0 30px;
+    align-items: flex-end;
+  }
+
+  .hero-copy h1 {
+    max-width: 350px;
+    font-size: clamp(47px, 13.2vw, 54px);
+    font-weight: 740;
+    line-height: .92;
+    letter-spacing: -.068em;
+  }
+
+  .hero-copy h1 em {
+    margin-top: .16em;
+    transform: translateX(1.5%);
+  }
+
+  .inner-page h1,
+  .archive-title h1,
+  .consider-hero h1,
+  .closet-page .page-title-row h1 {
+    font-size: var(--mobile-page-title);
+    font-weight: 720;
+    line-height: .98;
+    letter-spacing: -.055em;
+  }
+
+  .section-head h2,
+  .archive-portal-copy h2,
+  .exhibition-label h2 {
+    font-size: var(--mobile-section-title);
+    font-weight: 680;
+    line-height: 1.08;
+    letter-spacing: -.035em;
+  }
+
+  .idle-card h3,
+  .buy-card h3,
+  .palette-panel h3,
+  .decision-rule h3 {
+    font-size: var(--mobile-card-title);
+    font-weight: 680;
+    line-height: 1.18;
+    letter-spacing: -.03em;
+  }
+
+  .eyebrow {
+    margin-bottom: 7px;
+    font-size: 7px;
+    line-height: 1.2;
+    letter-spacing: .15em;
+  }
+
+  .summary-strip {
+    min-height: 58px;
+    margin-bottom: 18px;
+    padding: 9px 0;
+  }
+
+  .summary-strip strong {
+    font-size: 21px;
+  }
+
+  .summary-strip span {
+    font-size: 8px;
+  }
+
+  .today-grid {
+    gap: 12px;
+  }
+
+  .outfit-feature {
+    padding: 16px;
+    border-radius: 14px;
+  }
+
+  .section-head {
+    min-height: 44px;
+    align-items: flex-end;
+  }
+
+  .section-head button {
+    padding: 5px 0;
+    font-size: 9px;
+  }
+
+  .look-canvas {
+    min-height: 270px;
+    height: 270px;
+    margin-top: 15px;
+    border-radius: 10px;
+  }
+
+  .look-note {
+    left: 10px;
+    bottom: 10px;
+    width: 138px;
+    padding: 10px;
+  }
+
+  .look-note p {
+    font-size: 10px;
+  }
+
+  .look-footer {
+    min-height: 40px;
+    padding-top: 10px;
+    align-items: center;
+  }
+
+  .look-footer span {
+    font-size: 8px;
+  }
+
+  .side-stack {
+    gap: 12px;
+  }
+
+  .idle-card,
+  .buy-card {
+    min-height: 0;
+    padding: 20px;
+  }
+
+  .idle-card {
+    gap: 15px;
+  }
+
+  .idle-items {
+    gap: 8px;
+  }
+
+  .idle-items .garment-visual {
+    aspect-ratio: .9;
+    border-radius: 8px;
+  }
+
+  .idle-card > button,
+  .buy-card button {
+    padding-top: 10px;
+    font-size: 9px;
+  }
+
+  .buy-card {
+    min-height: 176px;
+    justify-content: center;
+  }
+
+  .archive-portal {
+    margin-top: 56px;
+    grid-template-columns: 1fr;
+    border-radius: 14px;
+  }
+
+  .archive-portal-copy {
+    min-height: 260px;
+    padding: 28px 22px;
+  }
+
+  .archive-portal-copy h2 {
+    max-width: 290px;
+  }
+
+  .archive-portal-copy > p:not(.eyebrow) {
+    max-width: 280px;
+    margin-top: 14px;
+    font-size: 10px;
+  }
+
+  .archive-portal-looks {
+    min-height: 220px;
+    padding: 18px;
+    gap: 10px;
+  }
+
+  .archive-portal-looks > button:nth-child(2) {
+    transform: translateY(9px);
+  }
+
+  .recent-section {
+    margin-top: 58px;
+  }
+
+  .piece-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 22px 10px;
+  }
+
+  .piece-card:nth-child(3n + 2) {
+    transform: none;
+  }
+
+  .piece-card .garment-visual {
+    border-radius: 10px;
+  }
+
+  /* Every inner page begins with the same title rhythm. */
+  .inner-page,
+  .closet-page.inner-page {
+    padding-top: 34px;
+  }
+
+  .page-title-row,
+  .archive-title {
+    min-height: 0;
+    margin-bottom: 24px;
+    padding: 0 0 18px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    align-items: end;
+    border: 0;
+    border-bottom: 1px solid var(--ink);
+  }
+
+  .closet-page .page-title-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+
+  .page-title-row .primary-button,
+  .archive-title .primary-button,
+  .consider-hero .primary-button {
+    min-height: 40px;
+    padding: 0 13px;
+    align-self: end;
+    font-size: 9px;
+    white-space: nowrap;
+  }
+
+  .page-title-row > div > p:not(.eyebrow),
+  .archive-title > div > p:not(.eyebrow) {
+    max-width: 310px;
+    margin-top: 9px;
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.55;
+  }
+
+  .closet-summary-copy {
+    margin-top: 9px;
+    gap: 6px;
+    font-size: 8px;
+  }
+
+  .closet-summary-copy strong {
+    font-size: 9px;
+  }
+
+  .closet-page .closet-tools {
+    margin-bottom: 15px;
+  }
+
+  .closet-page .filter-chips {
+    width: calc(100vw - (var(--mobile-gutter) * 2));
+  }
+
+  .closet-page .closet-grid {
+    gap: 20px 8px;
+  }
+
+  .look-builder {
+    gap: 10px;
+  }
+
+  .look-builder input,
+  .look-builder select {
+    min-height: 44px;
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+
+  .look-canvas-new {
+    min-height: 190px;
+    padding: 12px;
+    margin-bottom: 15px;
+  }
+
+  .look-actions {
+    gap: 9px;
+  }
+
+  .look-add-btn,
+  .look-actions .primary-button {
+    min-height: 42px;
+    padding: 0 14px;
+    font-size: 10px;
+  }
+
+  .archive-switch {
+    margin-bottom: 14px;
+  }
+
+  .archive-switch button {
+    min-height: 56px;
+    padding: 10px;
+    font-size: 10px;
+  }
+
+  .archive-outfit-tabs {
+    margin-bottom: 18px;
+  }
+
+  .archive-outfit-tabs button {
+    min-height: 40px;
+    padding: 8px;
+    font-size: 9px;
+  }
+
+  .archive-year-block {
+    gap: 14px;
+  }
+
+  .archive-year {
+    min-height: 76px;
+  }
+
+  .consider-page {
+    gap: 28px;
+  }
+
+  .consider-hero {
+    min-height: 0;
+    padding: 0 0 24px;
+    border-bottom: 1px solid var(--ink);
+  }
+
+  .consider-hero > p:not(.eyebrow) {
+    max-width: 310px;
+    margin: 13px 0 18px;
+    font-size: 10px;
+    line-height: 1.55;
+  }
+
+  .decision-board {
+    min-height: 0;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .decision-stat {
+    min-height: 112px;
+    padding: 17px;
+  }
+
+  .decision-stat span {
+    font-size: 42px;
+  }
+
+  .decision-rule {
+    min-height: 170px;
+    grid-column: 1 / -1;
+    padding: 22px;
+  }
+}
