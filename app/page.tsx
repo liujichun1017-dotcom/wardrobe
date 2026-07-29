@@ -88,7 +88,7 @@ const DEMO_ITEMS: Entry[] = [
     imageKey: null,
     imageUrl: null,
     notes: "",
-    extra: { shape: "shirt", tone: "#d8c6aa" },
+    extra: { shape: "shirt", tone: "#d8c6aa", price: "2399" },
     createdAt: "2026-03-02",
     isDemo: true,
   },
@@ -104,7 +104,7 @@ const DEMO_ITEMS: Entry[] = [
     imageKey: null,
     imageUrl: null,
     notes: "",
-    extra: { shape: "tee", tone: "#f4f0e8" },
+    extra: { shape: "tee", tone: "#f4f0e8", price: "699" },
     createdAt: "2026-02-11",
     isDemo: true,
   },
@@ -120,7 +120,7 @@ const DEMO_ITEMS: Entry[] = [
     imageKey: null,
     imageUrl: null,
     notes: "",
-    extra: { shape: "pants", tone: "#8097a6" },
+    extra: { shape: "pants", tone: "#8097a6", price: "1899" },
     createdAt: "2025-10-13",
     isDemo: true,
   },
@@ -136,7 +136,7 @@ const DEMO_ITEMS: Entry[] = [
     imageKey: null,
     imageUrl: null,
     notes: "",
-    extra: { shape: "bag", tone: "#34322f" },
+    extra: { shape: "bag", tone: "#34322f", price: "3299" },
     createdAt: "2025-09-20",
     isDemo: true,
   },
@@ -152,7 +152,7 @@ const DEMO_ITEMS: Entry[] = [
     imageKey: null,
     imageUrl: null,
     notes: "",
-    extra: { shape: "swim", tone: "#254a5f" },
+    extra: { shape: "swim", tone: "#254a5f", price: "899" },
     createdAt: "2025-07-01",
     isDemo: true,
   },
@@ -168,7 +168,7 @@ const DEMO_ITEMS: Entry[] = [
     imageKey: null,
     imageUrl: null,
     notes: "",
-    extra: { shape: "cap", tone: "#e5c958" },
+    extra: { shape: "cap", tone: "#e5c958", price: "299" },
     createdAt: "2025-07-01",
     isDemo: true,
   },
@@ -245,6 +245,36 @@ const CATEGORY_OPTIONS = [
   "泳帽",
   "其他",
 ];
+
+const CLOSET_GROUPS = ["上装", "下装", "连身", "外套", "鞋帽", "配饰", "其他"] as const;
+
+function closetGroupFor(category: string): (typeof CLOSET_GROUPS)[number] {
+  if (["T恤", "衬衫", "针织"].includes(category)) return "上装";
+  if (["长裤", "短裤"].includes(category)) return "下装";
+  if (["裙装", "泳装", "内衣 / 家居"].includes(category)) return "连身";
+  if (category === "外套") return "外套";
+  if (["鞋履", "帽子", "泳帽"].includes(category)) return "鞋帽";
+  if (["包袋", "配饰", "围巾", "腰带", "首饰"].includes(category)) return "配饰";
+  return "其他";
+}
+
+function normalizedPrice(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const amount = Number(String(value).replace(/[¥￥,\s]/g, ""));
+  return Number.isFinite(amount) && amount >= 0 ? Math.round(amount * 100) / 100 : null;
+}
+
+function priceForStorage(value: string): string | null {
+  if (!value.trim()) return "";
+  const amount = normalizedPrice(value);
+  return amount === null ? null : String(amount);
+}
+
+function displayPrice(value: unknown): string {
+  const amount = normalizedPrice(value);
+  if (amount === null) return "";
+  return amount.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
+}
 
 const REMOVAL_REASONS = [
   { id: "sold", label: "已售出", note: "卖掉了，保留过往穿着记录" },
@@ -1014,6 +1044,11 @@ function UploadModal({
       setError("先给它一个容易认出的名字吧");
       return;
     }
+    const storedPrice = priceForStorage(price);
+    if (mode !== "outfit" && storedPrice === null) {
+      setError("价格请填写数字，例如 3680");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -1043,7 +1078,7 @@ function UploadModal({
       setProcessingMessage("正在保存到你的衣橱…");
 
       const extra = {
-        price,
+        price: mode === "outfit" ? "" : storedPrice || "",
         cleaned: processedImage?.cleaned ?? false,
         outfitType: mode === "outfit" ? "ootd" : "",
         garmentIds: mode === "outfit" ? selectedGarmentIds : [],
@@ -1305,15 +1340,15 @@ function UploadModal({
             </label>
             {mode === "wish" ? (
               <label className="field full">
-                <span>价格（选填）</span>
+                <span>参考价格（选填）</span>
                 <input
                   value={price}
                   onChange={(event) => setPrice(event.target.value)}
                   inputMode="decimal"
-                  placeholder="¥"
+                  placeholder="例如 3680"
                 />
               </label>
-            ) : (
+            ) : mode === "outfit" ? (
               <label className="field full">
                 <span>适合季节</span>
                 <select value={season} onChange={(event) => setSeason(event.target.value)}>
@@ -1324,6 +1359,28 @@ function UploadModal({
                   <option>冬季</option>
                 </select>
               </label>
+            ) : (
+              <>
+                <label className="field">
+                  <span>适合季节</span>
+                  <select value={season} onChange={(event) => setSeason(event.target.value)}>
+                    <option>四季</option>
+                    <option>春夏</option>
+                    <option>秋冬</option>
+                    <option>夏季</option>
+                    <option>冬季</option>
+                  </select>
+                </label>
+                <label className="field">
+                  <span>购入价格（选填）</span>
+                  <input
+                    value={price}
+                    onChange={(event) => setPrice(event.target.value)}
+                    inputMode="decimal"
+                    placeholder="例如 3680"
+                  />
+                </label>
+              </>
             )}
           </div>
 
@@ -1459,6 +1516,7 @@ function EditGarmentModal({
   const [category, setCategory] = useState(item.category);
   const [color, setColor] = useState(item.color);
   const [season, setSeason] = useState(item.season);
+  const [price, setPrice] = useState(String(item.extra.price || ""));
   const [notes, setNotes] = useState(item.notes);
   const [replacementFile, setReplacementFile] = useState<File | null>(null);
   const [replacementPreview, setReplacementPreview] = useState("");
@@ -1498,6 +1556,11 @@ function EditGarmentModal({
       setError("名称不能为空");
       return;
     }
+    const storedPrice = priceForStorage(price);
+    if (storedPrice === null) {
+      setError("价格请填写数字，例如 3680");
+      return;
+    }
     setSaving(true);
     setError("");
     let replacementKey: string | null = null;
@@ -1523,10 +1586,14 @@ function EditGarmentModal({
         color: color.trim(),
         season,
         notes: notes.trim(),
+        extra: {
+          ...(item.extra || {}),
+          price: storedPrice,
+          ...(replacementKey ? { cleaned: false } : {}),
+        },
       };
       if (replacementKey) {
         updatePayload.image_key = replacementKey;
-        updatePayload.extra = { ...(item.extra || {}), cleaned: false };
       }
 
       const { data, error: updateError } = await supabase
@@ -1626,7 +1693,7 @@ function EditGarmentModal({
               <span>颜色</span>
               <input value={color} onChange={(event) => setColor(event.target.value)} />
             </label>
-            <label className="field full">
+            <label className="field">
               <span>适合季节</span>
               <select value={season} onChange={(event) => setSeason(event.target.value)}>
                 <option>四季</option>
@@ -1635,6 +1702,15 @@ function EditGarmentModal({
                 <option>夏季</option>
                 <option>冬季</option>
               </select>
+            </label>
+            <label className="field">
+              <span>购入价格（选填）</span>
+              <input
+                value={price}
+                onChange={(event) => setPrice(event.target.value)}
+                inputMode="decimal"
+                placeholder="例如 3680"
+              />
             </label>
             <label className="field full">
               <span>备注（选填）</span>
@@ -1909,12 +1985,24 @@ function Home({ displayName }: { displayName: string }) {
   const longUnworn = visibleGarments
     .filter((item) => daysSince(item.lastWornAt) >= 30)
     .sort((a, b) => daysSince(b.lastWornAt) - daysSince(a.lastWornAt));
-  const categories = ["全部", ...Array.from(new Set(visibleGarments.map((item) => item.category)))];
+  const categories = [
+    "全部",
+    ...CLOSET_GROUPS.filter((group) =>
+      visibleGarments.some((item) => closetGroupFor(item.category) === group),
+    ),
+  ];
   const closetView = visibleGarments.filter(
     (item) =>
-      (categoryFilter === "全部" || item.category === categoryFilter) &&
-      (!query || `${item.name}${item.category}${item.color}`.toLowerCase().includes(query.toLowerCase())),
+      (categoryFilter === "全部" || closetGroupFor(item.category) === categoryFilter) &&
+      (!query ||
+        `${item.name}${item.category}${item.color}${String(item.extra.price || "")}`
+          .toLowerCase()
+          .includes(query.toLowerCase())),
   );
+  const pricedGarments = garments
+    .map((item) => normalizedPrice(item.extra.price))
+    .filter((amount): amount is number => amount !== null && amount > 0);
+  const recordedClosetValue = pricedGarments.reduce((total, amount) => total + amount, 0);
   const archiveSourceGarments = allGarments.length ? allGarments : DEMO_ITEMS;
   const lookGarmentSource = allGarments.length ? allGarments : DEMO_ITEMS;
   const archiveCategories = [
@@ -2298,7 +2386,16 @@ function Home({ displayName }: { displayName: string }) {
               <div>
                 <p className="eyebrow">GARMENT ARCHIVE / ALL</p>
                 <h1>衣物档案</h1>
-                <p>{visibleGarments.length} 件单品，清清楚楚。</p>
+                <div className="closet-summary-copy">
+                  <span>{visibleGarments.length} 件单品</span>
+                  {pricedGarments.length > 0 && (
+                    <>
+                      <i />
+                      <span>{pricedGarments.length} 件已记价格</span>
+                      <strong>¥ {displayPrice(recordedClosetValue)}</strong>
+                    </>
+                  )}
+                </div>
               </div>
               <button className="primary-button" onClick={() => setUploadMode("garment")}>
                 ＋ 添加衣物
@@ -2339,28 +2436,36 @@ function Home({ displayName }: { displayName: string }) {
                     )}
                   </div>
                   <div className="closet-meta">
-                    <strong>{item.name}</strong>
+                    <div className="closet-meta-primary">
+                      <strong>{item.name}</strong>
+                      {displayPrice(item.extra.price) && (
+                        <b>¥ {displayPrice(item.extra.price)}</b>
+                      )}
+                    </div>
                     <span>
                       {item.category} · {item.color || "未标颜色"}
                     </span>
                     <small>穿过 {item.wornCount} 次</small>
                     {item.notes && <p className="garment-notes">{item.notes}</p>}
                     {!item.isDemo && (
-                      <div className="garment-actions">
-                        <button
-                          className="garment-worn-button"
-                          onClick={() => recordWorn(item)}
-                          disabled={item.lastWornAt === localDateKey()}
-                        >
-                          {item.lastWornAt === localDateKey() ? "今天已记" : "今天穿了"}
-                        </button>
-                        <button className="garment-edit-button" onClick={() => setEditTarget(item)}>
-                          编辑资料
-                        </button>
-                        <button className="garment-departure-button" onClick={() => setRemoveTarget(item)}>
-                          出库 / 已售
-                        </button>
-                      </div>
+                      <details className="garment-actions">
+                        <summary aria-label={`管理 ${item.name}`}>•••</summary>
+                        <div>
+                          <button
+                            className="garment-worn-button"
+                            onClick={() => recordWorn(item)}
+                            disabled={item.lastWornAt === localDateKey()}
+                          >
+                            {item.lastWornAt === localDateKey() ? "今天已记" : "今天穿了"}
+                          </button>
+                          <button className="garment-edit-button" onClick={() => setEditTarget(item)}>
+                            编辑资料
+                          </button>
+                          <button className="garment-departure-button" onClick={() => setRemoveTarget(item)}>
+                            出库 / 已售
+                          </button>
+                        </div>
+                      </details>
                     )}
                   </div>
                 </article>
@@ -2667,7 +2772,12 @@ function Home({ displayName }: { displayName: string }) {
                           </span>
                         )}
                         <div className="exhibit-meta">
-                          <strong>{garment.name}</strong>
+                          <div className="exhibit-name-price">
+                            <strong>{garment.name}</strong>
+                            {displayPrice(garment.extra.price) && (
+                              <b>¥ {displayPrice(garment.extra.price)}</b>
+                            )}
+                          </div>
                           <span>{garment.category} / {garment.color || "未标颜色"}</span>
                           <small>
                             入藏 {new Date(garment.createdAt).toLocaleDateString("zh-CN", {
@@ -2743,7 +2853,9 @@ function Home({ displayName }: { displayName: string }) {
                     <div>
                       <strong>{wish.name}</strong>
                       <span>{wish.category} · {wish.color}</span>
-                      {wish.extra.price && <small>¥ {String(wish.extra.price)}</small>}
+                      {displayPrice(wish.extra.price) && (
+                        <small>¥ {displayPrice(wish.extra.price)}</small>
+                      )}
                       <p>{String(wish.extra.recommendation || "已经收进考虑清单")}</p>
                     </div>
                     <button
