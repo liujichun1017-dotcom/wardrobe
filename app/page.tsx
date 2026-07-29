@@ -2244,7 +2244,9 @@ function Home({ displayName }: { displayName: string }) {
             <div className="hero-copy">
               <h1 aria-label="今天，穿得不那么正确。">
                 <span>今天，穿得</span>
-                <em>不那么正确。</em>
+                <em>
+                  不那么正确<span className="hero-period">。</span>
+                </em>
               </h1>
               {isDemoCloset && (
                 <button className="demo-badge" onClick={() => setUploadMode("garment")}>
