@@ -1,0 +1,327 @@
+.lab {
+  min-height: 100svh;
+  padding: 0 0 80px;
+  background: #f4f3ee;
+  color: #11110f;
+  font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", sans-serif;
+}
+
+.header {
+  min-height: 64px;
+  padding: 0 max(20px, calc((100vw - 1160px) / 2));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(17, 17, 15, .15);
+}
+
+.header a {
+  color: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.header span {
+  color: #6c6b66;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .14em;
+}
+
+.intro,
+.controls,
+.comparison,
+.verdict {
+  width: min(1160px, calc(100% - 40px));
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.intro {
+  padding: 70px 0 42px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(230px, .4fr);
+  align-items: end;
+  gap: 30px;
+}
+
+.intro > p {
+  grid-column: 1 / -1;
+  margin: 0 0 -12px;
+  color: #6c6b66;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .15em;
+}
+
+.intro h1 {
+  margin: 0;
+  font-size: clamp(60px, 8vw, 108px);
+  font-weight: 760;
+  line-height: .86;
+  letter-spacing: -.075em;
+}
+
+.intro h1::first-line {
+  color: #11110f;
+}
+
+.intro > div {
+  padding: 18px 0;
+  display: grid;
+  gap: 7px;
+  border-top: 1px solid #11110f;
+  border-bottom: 1px solid #11110f;
+}
+
+.intro > div strong {
+  font-size: 13px;
+}
+
+.intro > div span {
+  color: #6c6b66;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.controls {
+  padding: 20px 0;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid rgba(17, 17, 15, .15);
+}
+
+.controls input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.selectButton,
+.runButton {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid #11110f;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.selectButton {
+  background: transparent;
+  color: #11110f;
+}
+
+.runButton {
+  border-radius: 999px 999px 7px 999px;
+  background: #11110f;
+  color: #fff;
+}
+
+.selectButton:disabled,
+.runButton:disabled {
+  cursor: default;
+  opacity: .42;
+}
+
+.status {
+  margin: 0;
+  color: #6c6b66;
+  font-size: 10px;
+  text-align: right;
+}
+
+.status strong {
+  color: #11110f;
+}
+
+.error {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid #e21d2b;
+  background: #fff;
+  color: #8e1d21;
+  font-size: 11px;
+}
+
+.comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.comparison figure {
+  margin: 0;
+}
+
+.imageStage {
+  min-height: 540px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(17, 17, 15, .16);
+  border-radius: 16px;
+  background: #e7e5df;
+}
+
+.whiteStage {
+  background: #fff;
+}
+
+.imageStage img {
+  width: 100%;
+  height: 100%;
+  max-height: 700px;
+  display: block;
+  object-fit: contain;
+}
+
+.imageStage > span {
+  color: rgba(17, 17, 15, .25);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .16em;
+}
+
+.comparison figcaption {
+  padding: 12px 2px 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.comparison figcaption strong {
+  font-size: 12px;
+}
+
+.comparison figcaption span {
+  color: #6c6b66;
+  font-size: 9px;
+  text-align: right;
+}
+
+.verdict {
+  margin-top: 48px;
+  padding: 26px;
+  display: grid;
+  grid-template-columns: 1.4fr repeat(4, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  border-radius: 14px;
+  background: #11110f;
+  color: #fff;
+}
+
+.verdict strong {
+  font-size: 18px;
+}
+
+.verdict span {
+  color: rgba(255, 255, 255, .65);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.verdict a {
+  padding-bottom: 5px;
+  border-bottom: 1px solid currentColor;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .header {
+    min-height: 54px;
+    padding: 0 16px;
+  }
+
+  .header span {
+    font-size: 6px;
+  }
+
+  .intro,
+  .controls,
+  .comparison,
+  .verdict {
+    width: calc(100% - 32px);
+  }
+
+  .intro {
+    padding: 42px 0 28px;
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+
+  .intro > p {
+    margin-bottom: -8px;
+  }
+
+  .intro h1 {
+    font-size: clamp(52px, 15.5vw, 64px);
+    line-height: .89;
+  }
+
+  .intro > div {
+    padding: 14px 0;
+  }
+
+  .controls {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .selectButton,
+  .runButton {
+    min-height: 46px;
+    padding: 0 10px;
+    font-size: 10px;
+  }
+
+  .status {
+    grid-column: 1 / -1;
+    min-height: 20px;
+    text-align: left;
+  }
+
+  .comparison {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+
+  .imageStage {
+    min-height: 0;
+    aspect-ratio: 4 / 5;
+    border-radius: 13px;
+  }
+
+  .comparison figcaption {
+    padding-top: 9px;
+  }
+
+  .verdict {
+    margin-top: 38px;
+    padding: 22px;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .verdict span {
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, .14);
+  }
+
+  .verdict a {
+    width: max-content;
+    margin-top: 8px;
+  }
+}
