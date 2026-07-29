@@ -15,6 +15,9 @@ type LocalCutoutRunner = (image: string) => Promise<LocalCutoutImage[]>;
 
 let cutoutRunnerPromise: Promise<LocalCutoutRunner> | null = null;
 
+const PUBLIC_TEST_IMAGE =
+  "https://images.unsplash.com/photo-1581655353564-df123a1eb820?auto=format&fit=crop&fm=jpg&q=82&w=1400";
+
 function loadRmbgRunner(
   onProgress: (message: string) => void,
 ): Promise<LocalCutoutRunner> {
@@ -209,9 +212,7 @@ export default function CutoutTestPage() {
     [resultUrl],
   );
 
-  function selectFile(event: ChangeEvent<HTMLInputElement>) {
-    const next = event.target.files?.[0];
-    if (!next) return;
+  function prepareFile(next: File) {
     if (!next.type.startsWith("image/")) {
       setError("请选择 JPG、PNG 或 WebP 图片");
       return;
@@ -228,6 +229,36 @@ export default function CutoutTestPage() {
     setElapsed(null);
     setError("");
     setStatus("照片已准备好，点击开始测试");
+  }
+
+  function selectFile(event: ChangeEvent<HTMLInputElement>) {
+    const next = event.target.files?.[0];
+    if (next) prepareFile(next);
+  }
+
+  async function loadPublicTestImage() {
+    if (running) return;
+    setRunning(true);
+    setError("");
+    setStatus("正在载入公开测试图…");
+    try {
+      const response = await fetch(PUBLIC_TEST_IMAGE);
+      if (!response.ok) throw new Error("公开测试图载入失败");
+      const blob = await response.blob();
+      prepareFile(
+        new File([blob], "unsplash-white-shirt.jpg", {
+          type: blob.type || "image/jpeg",
+        }),
+      );
+      setStatus("白色 T 恤难例已准备好，点击开始测试");
+    } catch (caught) {
+      const message =
+        caught instanceof Error ? caught.message : "公开测试图载入失败";
+      setError(`${message}，你仍可以选择手机里的照片。`);
+      setStatus("测试图未载入");
+    } finally {
+      setRunning(false);
+    }
   }
 
   async function runCutout() {
@@ -304,11 +335,27 @@ export default function CutoutTestPage() {
         >
           {running ? "正在本机处理…" : "开始新模型测试"}
         </button>
+        <button
+          type="button"
+          className={styles.sampleButton}
+          onClick={loadPublicTestImage}
+          disabled={running}
+        >
+          载入公开难例
+        </button>
         <p className={styles.status} role="status">
           {status}
           {elapsed !== null && <strong> · {elapsed} 秒</strong>}
         </p>
         {error && <p className={styles.error}>{error}</p>}
+        <a
+          className={styles.sampleCredit}
+          href="https://unsplash.com/photos/white-crew-neck-t-shirt-acn5ERAeSb4"
+          target="_blank"
+          rel="noreferrer"
+        >
+          测试图：Haryo Setyadi / Unsplash
+        </a>
       </section>
 
       <section className={styles.comparison} aria-label="抠图前后对比">

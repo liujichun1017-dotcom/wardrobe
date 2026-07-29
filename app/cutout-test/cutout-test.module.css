@@ -88,7 +88,7 @@
 .controls {
   padding: 20px 0;
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-columns: auto auto auto minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   border-top: 1px solid rgba(17, 17, 15, .15);
@@ -103,7 +103,8 @@
 }
 
 .selectButton,
-.runButton {
+.runButton,
+.sampleButton {
   min-height: 44px;
   padding: 0 18px;
   border: 1px solid #11110f;
@@ -124,8 +125,14 @@
   color: #fff;
 }
 
+.sampleButton {
+  background: #e21d2b;
+  color: #fff;
+}
+
 .selectButton:disabled,
-.runButton:disabled {
+.runButton:disabled,
+.sampleButton:disabled {
   cursor: default;
   opacity: .42;
 }
@@ -149,6 +156,19 @@
   background: #fff;
   color: #8e1d21;
   font-size: 11px;
+}
+
+.sampleCredit {
+  grid-column: 1 / -1;
+  width: max-content;
+  color: #6c6b66;
+  font-size: 8px;
+  text-decoration: none;
+}
+
+.sampleCredit:hover {
+  color: #11110f;
+  text-decoration: underline;
 }
 
 .comparison {
@@ -281,10 +301,15 @@
   }
 
   .selectButton,
-  .runButton {
+  .runButton,
+  .sampleButton {
     min-height: 46px;
     padding: 0 10px;
     font-size: 10px;
+  }
+
+  .sampleButton {
+    grid-column: 1 / -1;
   }
 
   .status {
