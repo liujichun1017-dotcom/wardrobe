@@ -1047,7 +1047,8 @@ function UploadModal({
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
-  const [cleanBackground, setCleanBackground] = useState(mode !== "outfit");
+  // Local cutout stays opt-in until a replacement model passes real garment tests.
+  const [cleanBackground, setCleanBackground] = useState(false);
   const [processedCandidate, setProcessedCandidate] = useState<ProcessedImage | null>(null);
   const [processedPreview, setProcessedPreview] = useState("");
   const [maskEditorOpen, setMaskEditorOpen] = useState(false);
@@ -1196,6 +1197,22 @@ function UploadModal({
       let savedRow = inserted as EntryRow;
       if (processedImage) {
         const imageKey = `${userId}/${inserted.id}.${ext}`;
+        const originalImageKey =
+          processedImage.cleaned && processedImage.sourceBlob
+            ? `${userId}/${inserted.id}-original.webp`
+            : "";
+        if (originalImageKey && processedImage.sourceBlob) {
+          const { error: originalUploadError } = await supabase.storage
+            .from(STORAGE_BUCKET)
+            .upload(originalImageKey, processedImage.sourceBlob, {
+              contentType: processedImage.sourceBlob.type,
+              upsert: true,
+            });
+          if (originalUploadError) {
+            await supabase.from("entries").delete().eq("id", inserted.id);
+            throw new Error("原图备份失败");
+          }
+        }
         const { error: upErr } = await supabase.storage
           .from(STORAGE_BUCKET)
           .upload(imageKey, processedImage.blob, {
@@ -1203,17 +1220,25 @@ function UploadModal({
             upsert: true,
           });
         if (upErr) {
+          if (originalImageKey) {
+            await supabase.storage.from(STORAGE_BUCKET).remove([originalImageKey]);
+          }
           await supabase.from("entries").delete().eq("id", inserted.id);
           throw new Error("图片上传失败");
         }
+        const storedExtra = originalImageKey
+          ? { ...extra, originalImageKey }
+          : extra;
         const { data: updated, error: updErr } = await supabase
           .from("entries")
-          .update({ image_key: imageKey })
+          .update({ image_key: imageKey, extra: storedExtra })
           .eq("id", inserted.id)
           .select()
           .single();
         if (updErr || !updated) {
-          await supabase.storage.from(STORAGE_BUCKET).remove([imageKey]);
+          await supabase.storage
+            .from(STORAGE_BUCKET)
+            .remove([imageKey, originalImageKey].filter(Boolean));
           await supabase.from("entries").delete().eq("id", inserted.id);
           throw new Error("保存失败");
         }
@@ -1316,8 +1341,8 @@ function UploadModal({
           {mode !== "outfit" && (
             <label className="clean-toggle">
               <span>
-                <strong>自动抠图 · 白底陈列</strong>
-                <small>衣服会缩小居中并留出白边；首次约 100MB，只在本机处理</small>
+                <strong>实验性本机抠图（先预览）</strong>
+                <small>白色、浅色和细边缘可能误删；不满意请直接改用原图</small>
               </span>
               <input
                 type="checkbox"
@@ -1861,10 +1886,17 @@ function RemoveGarmentModal({
     setBusy(true);
     setError("");
     try {
-      if (item.imageKey) {
+      const originalImageKey =
+        typeof item.extra.originalImageKey === "string"
+          ? item.extra.originalImageKey
+          : "";
+      const imageKeys = [item.imageKey, originalImageKey].filter(
+        (key): key is string => Boolean(key),
+      );
+      if (imageKeys.length) {
         const { error: storageError } = await supabase.storage
           .from(STORAGE_BUCKET)
-          .remove([item.imageKey]);
+          .remove(imageKeys);
         if (storageError) throw new Error("Unable to delete image");
       }
       const { error } = await supabase.from("entries").delete().eq("id", item.id);
