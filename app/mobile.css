@@ -165,6 +165,18 @@
   box-shadow: 0 0 0 2px var(--card);
 }
 
+.garment-visual.cleaned-photo {
+  background: #fff;
+}
+
+.garment-visual.cleaned-photo img {
+  object-fit: contain;
+}
+
+.background-review figure:last-child {
+  background: #fff;
+}
+
 @media (max-width: 700px) {
   :root {
     --mobile-page-title: 38px;

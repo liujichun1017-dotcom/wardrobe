@@ -323,7 +323,9 @@ function GarmentVisual({
 }) {
   if (item.imageUrl) {
     return (
-      <div className={`garment-visual has-photo ${className}`}>
+      <div
+        className={`garment-visual has-photo ${item.extra.cleaned ? "cleaned-photo" : ""} ${className}`}
+      >
         {/* User-owned uploads are served directly from this app. */}
         <img src={item.imageUrl} alt={item.name} />
       </div>
@@ -606,19 +608,78 @@ function validateForegroundMask(transparent: Blob): Promise<void> {
   });
 }
 
-// 把透明 PNG 合成到纯白底，输出 jpg
+// 把透明主体裁到有效边界，再缩小居中到统一的 4:5 白底画布。
+// 这样无论原照片拍得近或远，衣橱陈列中的衣服都会保持一致留白。
 function compositeOnWhite(transparent: Blob): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const src = URL.createObjectURL(transparent);
     const image = new Image();
     image.onload = () => {
-      const maxSide = 1400;
-      const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
-      const width = Math.max(1, Math.round(image.width * scale));
-      const height = Math.max(1, Math.round(image.height * scale));
+      const sourceCanvas = document.createElement("canvas");
+      sourceCanvas.width = image.naturalWidth;
+      sourceCanvas.height = image.naturalHeight;
+      const sourceContext = sourceCanvas.getContext("2d", { willReadFrequently: true });
+      if (!sourceContext) {
+        URL.revokeObjectURL(src);
+        reject(new Error("图片处理失败"));
+        return;
+      }
+      sourceContext.drawImage(image, 0, 0);
+      const pixels = sourceContext.getImageData(
+        0,
+        0,
+        sourceCanvas.width,
+        sourceCanvas.height,
+      ).data;
+      let minX = sourceCanvas.width;
+      let minY = sourceCanvas.height;
+      let maxX = -1;
+      let maxY = -1;
+      for (let y = 0; y < sourceCanvas.height; y += 1) {
+        for (let x = 0; x < sourceCanvas.width; x += 1) {
+          const alpha = pixels[(y * sourceCanvas.width + x) * 4 + 3];
+          if (alpha <= 12) continue;
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
+        }
+      }
+      if (maxX < minX || maxY < minY) {
+        URL.revokeObjectURL(src);
+        reject(new Error("没有识别到衣物主体"));
+        return;
+      }
+
+      const detectedWidth = maxX - minX + 1;
+      const detectedHeight = maxY - minY + 1;
+      const edgePadding = Math.max(
+        4,
+        Math.round(Math.max(detectedWidth, detectedHeight) * 0.018),
+      );
+      const cropX = Math.max(0, minX - edgePadding);
+      const cropY = Math.max(0, minY - edgePadding);
+      const cropRight = Math.min(sourceCanvas.width, maxX + edgePadding + 1);
+      const cropBottom = Math.min(sourceCanvas.height, maxY + edgePadding + 1);
+      const cropWidth = cropRight - cropX;
+      const cropHeight = cropBottom - cropY;
+
+      const frameWidth = 1200;
+      const frameHeight = 1500;
+      const maxGarmentWidth = frameWidth * 0.7;
+      const maxGarmentHeight = frameHeight * 0.74;
+      const garmentScale = Math.min(
+        maxGarmentWidth / cropWidth,
+        maxGarmentHeight / cropHeight,
+      );
+      const drawWidth = Math.max(1, Math.round(cropWidth * garmentScale));
+      const drawHeight = Math.max(1, Math.round(cropHeight * garmentScale));
+      const drawX = Math.round((frameWidth - drawWidth) / 2);
+      const drawY = Math.round((frameHeight - drawHeight) / 2 - frameHeight * 0.012);
+
       const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
+      canvas.width = frameWidth;
+      canvas.height = frameHeight;
       const context = canvas.getContext("2d");
       if (!context) {
         URL.revokeObjectURL(src);
@@ -626,8 +687,25 @@ function compositeOnWhite(transparent: Blob): Promise<Blob> {
         return;
       }
       context.fillStyle = "#ffffff";
-      context.fillRect(0, 0, width, height);
-      context.drawImage(image, 0, 0, width, height);
+      context.fillRect(0, 0, frameWidth, frameHeight);
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = "high";
+      context.save();
+      context.shadowColor = "rgba(17, 17, 15, 0.07)";
+      context.shadowBlur = 18;
+      context.shadowOffsetY = 7;
+      context.drawImage(
+        sourceCanvas,
+        cropX,
+        cropY,
+        cropWidth,
+        cropHeight,
+        drawX,
+        drawY,
+        drawWidth,
+        drawHeight,
+      );
+      context.restore();
       URL.revokeObjectURL(src);
       canvas.toBlob(
         (blob) => {
@@ -937,7 +1015,7 @@ async function normalizeImage(
     const transparent = await removeBackgroundLocally(scaled, onProgress);
     onProgress?.("正在检查衣物是否被正确识别…");
     await validateForegroundMask(transparent);
-    onProgress?.("正在铺设纯白背景…");
+    onProgress?.("正在把衣服缩小居中并铺设白底…");
     const whiteBackground = await compositeOnWhite(transparent);
     return {
       blob: whiteBackground,
@@ -969,7 +1047,7 @@ function UploadModal({
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
-  const [cleanBackground, setCleanBackground] = useState(false);
+  const [cleanBackground, setCleanBackground] = useState(mode !== "outfit");
   const [processedCandidate, setProcessedCandidate] = useState<ProcessedImage | null>(null);
   const [processedPreview, setProcessedPreview] = useState("");
   const [maskEditorOpen, setMaskEditorOpen] = useState(false);
@@ -1238,8 +1316,8 @@ function UploadModal({
           {mode !== "outfit" && (
             <label className="clean-toggle">
               <span>
-                <strong>高精度本机白底（可选）</strong>
-                <small>首次约 100MB；先预览再确认，照片不会发送给第三方</small>
+                <strong>自动抠图 · 白底陈列</strong>
+                <small>衣服会缩小居中并留出白边；首次约 100MB，只在本机处理</small>
               </span>
               <input
                 type="checkbox"
@@ -1261,7 +1339,7 @@ function UploadModal({
               <div className="background-review-head">
                 <div>
                   <strong>先确认，再保存</strong>
-                  <small>请检查衣服的颜色和轮廓；识别不准可以手动修边。</small>
+                  <small>衣服会按统一比例缩小居中；轮廓不准可以手动修边。</small>
                 </div>
                 <div className="background-review-actions">
                   {processedCandidate?.sourceBlob && processedCandidate.transparentBlob && (
@@ -1292,7 +1370,7 @@ function UploadModal({
                 </figure>
                 <figure>
                   <img src={processedPreview} alt="白底处理预览" />
-                  <figcaption>白底预览</figcaption>
+                  <figcaption>白底陈列</figcaption>
                 </figure>
               </div>
             </section>
